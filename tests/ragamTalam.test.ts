@@ -53,6 +53,16 @@ describe("formatRagamTalamDisplay", () => {
     expect(autoRagamDisplayName(parts, null)).toBe("Sri");
     expect(autoTalamDisplayName(parts, null)).toBe("Adi");
   });
+
+  it("uses Telugu / Kannada / Sanskrit labels (UI languages already in the engine)", () => {
+    const parts = parseRagamTalamHeading("Ragam : Sri | Talam : Adi")!;
+    expect(formatRagamTalamDisplay(parts, "telugu")).toMatch(/^రాగం : /);
+    expect(formatRagamTalamDisplay(parts, "telugu")).toContain("తాళం : ");
+    expect(formatRagamTalamDisplay(parts, "kannada")).toMatch(/^ರಾಗ : /);
+    expect(formatRagamTalamDisplay(parts, "kannada")).toContain("ತಾಳ : ");
+    expect(formatRagamTalamDisplay(parts, "sanskrit")).toMatch(/^रागम् : /);
+    expect(formatRagamTalamDisplay(parts, "sanskrit")).toContain("तालम् : ");
+  });
 });
 
 describe("CmntParser ragam/talam language", () => {

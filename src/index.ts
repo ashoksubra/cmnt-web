@@ -42,4 +42,4 @@ export {
 } from "./core/RagamTalamDisplay.js";
 export type { RagamTalamParts, RagamTalamDisplayOverrides } from "./core/RagamTalamDisplay.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
-export type { SchoolId, SchoolPreset } from "./theme/schools.js";
+export type { SchoolId, SchoolPreset, UiLangOverride } from "./theme/schools.js";

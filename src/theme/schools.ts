@@ -10,6 +10,12 @@
 
 export type SchoolId = "classic-print" | "tanjore-dense" | "roman-teaching" | "screen-night";
 
+/**
+ * Language options exposed in the composer UI. Matches the scripts already
+ * supported by `Translit` / the JAR (Malayalam is deferred until those are done).
+ */
+export type UiLangOverride = "auto" | "english" | "tamil" | "telugu" | "kannada" | "sanskrit";
+
 export type SchoolPreset = {
   id: SchoolId;
   label: string;
@@ -17,7 +23,7 @@ export type SchoolPreset = {
   /** CSS class applied to #score-page. */
   cssClass: string;
   /** Suggested language override for the UI. */
-  preferredLang: "auto" | "english" | "tamil";
+  preferredLang: UiLangOverride;
   /** Density hint used by SvgScore. */
   density: { unitWidthScale: number; rowSpacingScale: number };
 };

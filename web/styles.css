@@ -20,15 +20,22 @@ body {
   flex-direction: column;
 }
 
-/* ---- header ---- */
+/* ---- header + menubar ---- */
 .app-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: #ffffff;
+  border-bottom: 1px solid #dbe1ea;
+}
+
+.app-header-row {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px 16px;
-  padding: 14px 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #dbe1ea;
+  padding: 12px 24px 8px;
 }
 
 .app-header h1 {
@@ -45,9 +52,149 @@ body {
   color: #7b8794;
 }
 
+.doc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
 .app-header-note {
+  margin-left: auto;
   font-size: 12px;
   color: #9aa5b1;
+}
+
+.menubar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 12px 6px;
+  user-select: none;
+}
+
+.menu-root {
+  position: relative;
+}
+
+.menu-button {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #1f2933;
+  cursor: pointer;
+}
+
+.menu-button:hover,
+.menu-root.open > .menu-button {
+  background: #e8eef7;
+  color: #1d4ed8;
+}
+
+.menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 40;
+  min-width: 240px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  padding: 6px 0;
+  background: #ffffff;
+  border: 1px solid #dbe1ea;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+.menu-panel-sub {
+  top: -6px;
+  left: calc(100% - 4px);
+  max-height: min(60vh, 420px);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  color: #1f2933;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled),
+.menu-submenu:hover > .menu-item-parent {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.menu-item:disabled {
+  color: #9aa5b1;
+  cursor: default;
+}
+
+.menu-shortcut {
+  font-size: 11px;
+  color: #7b8794;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.menu-caret {
+  color: #9aa5b1;
+  font-size: 11px;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 5px 0;
+  background: #e4e9f0;
+}
+
+.menu-submenu {
+  position: relative;
+}
+
+.menu-submenu > .menu-panel-sub {
+  display: none;
+}
+
+.menu-submenu:hover > .menu-panel-sub {
+  display: block;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+  .app-header,
+  .editor-pane {
+    display: none !important;
+  }
+  .composer {
+    display: block;
+  }
+  .preview-pane {
+    overflow: visible;
+    background: #ffffff;
+  }
+  .preview-scroll {
+    padding: 0;
+  }
+  .score-page {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+  }
 }
 
 /* ---- composer layout: editor left, preview right ---- */
@@ -131,7 +278,9 @@ body {
   background: #ffffff;
   color: #1f2933;
   width: 100%;
-  font-family: "Noto Sans Tamil", "Noto Serif Tamil", ui-sans-serif, system-ui, sans-serif;
+  font-family:
+    "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans Devanagari",
+    "Noto Serif Tamil", ui-sans-serif, system-ui, sans-serif;
 }
 
 .header-overrides input[type="text"]:focus {
@@ -461,9 +610,22 @@ body {
   --lyric-font: Georgia, "Times New Roman", serif;
 }
 
-/* Tamil glyphs render best in a script-aware font; applies on top of whichever
-   school is active (kept after the school rules so it always wins on ties). */
+/* Indic glyphs render best in a script-aware font; applies on top of whichever
+   school is active (kept after the school rules so it always wins on ties).
+   Malayalam deferred until Tamil/Telugu/Kannada/Sanskrit UI wiring is settled. */
 .score-page.lang-tamil .cmnt-score {
   --swara-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;
   --lyric-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;
+}
+.score-page.lang-telugu .cmnt-score {
+  --swara-font: "Noto Sans Telugu", Georgia, serif;
+  --lyric-font: "Noto Sans Telugu", Georgia, serif;
+}
+.score-page.lang-kannada .cmnt-score {
+  --swara-font: "Noto Sans Kannada", Georgia, serif;
+  --lyric-font: "Noto Sans Kannada", Georgia, serif;
+}
+.score-page.lang-sanskrit .cmnt-score {
+  --swara-font: "Noto Sans Devanagari", Georgia, serif;
+  --lyric-font: "Noto Sans Devanagari", Georgia, serif;
 }

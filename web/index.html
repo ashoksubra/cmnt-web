@@ -7,22 +7,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="app-header">
-      <h1>CMNT Web <span class="app-header-sub">Composer preview</span></h1>
-      <div class="app-header-note">Path A &mdash; SVG score with live Indic transliteration</div>
+      <div class="app-header-row">
+        <h1>CMNT Web <span class="app-header-sub">Composer</span></h1>
+        <span id="doc-title" class="doc-title" title="Current song file">Untitled.txt</span>
+        <div class="app-header-note">Path A &mdash; SVG score with live Indic transliteration</div>
+      </div>
+      <nav id="menubar" class="menubar" aria-label="Application"></nav>
     </header>
 
     <main class="composer">
       <section class="editor-pane">
         <div class="toolbar">
           <label class="field">
-            <span>Fixture</span>
+            <span>Sample</span>
             <select id="fixture-select">
               <option value="smoke_adi">smoke_adi</option>
               <option value="smoke_adi_tamil">smoke_adi_tamil</option>
@@ -38,6 +42,9 @@
               <option value="auto">Auto (from source)</option>
               <option value="english">English</option>
               <option value="tamil">Tamil</option>
+              <option value="telugu">Telugu</option>
+              <option value="kannada">Kannada</option>
+              <option value="sanskrit">Sanskrit</option>
             </select>
           </label>
 
@@ -52,8 +59,6 @@
           </label>
 
           <button id="render-btn" type="button" class="primary-btn">Update</button>
-          <button id="export-svg-btn" type="button" class="secondary-btn">Export SVG</button>
-          <button id="export-png-btn" type="button" class="secondary-btn">Export PNG</button>
         </div>
 
         <div class="header-overrides" title="Raagam/Taalam follow the score language. Edit if automatic transliteration is imperfect.">
@@ -88,6 +93,8 @@
         </div>
       </section>
     </main>
+
+    <input id="open-file-input" type="file" accept=".txt,.cmnt,text/plain" hidden />
 
     <script type="module" src="./main.ts"></script>
   </body>

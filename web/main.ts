@@ -9,8 +9,10 @@ import {
   autoTalamDisplayName,
   parseRagamTalamHeading,
 } from "@cmnt/core/RagamTalamDisplay";
+import { TALA_NAMES } from "@cmnt/core/Talas";
 import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
-import type { SchoolId, SchoolPreset } from "@cmnt/theme/schools";
+import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
+import { buildMenubar, type MenuItem } from "./menubar";
 import stylesCssRaw from "./styles.css?raw";
 
 import smokeAdi from "../fixtures/smoke_adi.txt?raw";
@@ -27,18 +29,30 @@ const FIXTURES: Record<string, string> = {
   sankachakra: sankachakra,
 };
 
-/** "auto" leaves script detection to each row/heading's own `Language:` directive. */
-type LangOverride = "auto" | "english" | "tamil";
+const NEW_SONG_TEMPLATE = [
+  "Heading: \"Untitled\",bold,center,20",
+  "Heading: \"Composer\",italic,center,16,tight",
+  "Language: English",
+  "Raagam: Mayamalavagowla",
+  "Tala: Adi",
+  "DefaultSpeed: 0",
+  "",
+  "S: s r g m | p d n s'",
+  "L: sa ri ga ma pa da ni sa",
+  "",
+].join("\n");
 
 const SCHOOL_CLASSES = SCHOOL_PRESETS.map((s) => s.cssClass);
+const LANG_CLASSES = ["lang-tamil", "lang-telugu", "lang-kannada", "lang-sanskrit"] as const;
 
+const menubarEl = document.querySelector<HTMLElement>("#menubar")!;
+const docTitleEl = document.querySelector<HTMLSpanElement>("#doc-title")!;
+const openFileInput = document.querySelector<HTMLInputElement>("#open-file-input")!;
 const fixtureSelect = document.querySelector<HTMLSelectElement>("#fixture-select")!;
 const langSelect = document.querySelector<HTMLSelectElement>("#lang-select")!;
 const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")!;
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
-const exportSvgBtn = document.querySelector<HTMLButtonElement>("#export-svg-btn")!;
-const exportPngBtn = document.querySelector<HTMLButtonElement>("#export-png-btn")!;
 const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!;
 const talamDisplay = document.querySelector<HTMLInputElement>("#talam-display")!;
 const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
@@ -51,20 +65,62 @@ let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 let ragamNameDirty = false;
 let talamNameDirty = false;
 
-function forceScriptFor(lang: LangOverride): Script | undefined {
+/** Current song document name (download / title bar). */
+let currentFileName = "Untitled.txt";
+/** Optional File System Access handle for true Save (Chrome/Edge). */
+let currentFileHandle: FileSystemFileHandle | null = null;
+let documentDirty = false;
+
+type FileSystemFileHandle = {
+  name: string;
+  createWritable: () => Promise<{ write: (data: Blob | string) => Promise<void>; close: () => Promise<void> }>;
+  getFile: () => Promise<File>;
+};
+
+function forceScriptFor(lang: UiLangOverride): Script | undefined {
   if (lang === "auto") return undefined;
   if (lang === "english") return null;
-  return "tamil";
+  return lang;
 }
 
-function setStatusOk(): void {
-  statusLine.textContent = "Ready";
+function setStatusOk(message = "Ready"): void {
+  statusLine.textContent = message;
   statusLine.className = "status status-ok";
 }
 
 function setStatusError(message: string): void {
   statusLine.textContent = message;
   statusLine.className = "status status-error";
+}
+
+function updateDocTitle(): void {
+  docTitleEl.textContent = documentDirty ? `${currentFileName} •` : currentFileName;
+  document.title = `${documentDirty ? "• " : ""}${currentFileName} — CMNT Web`;
+}
+
+function markDirty(): void {
+  if (!documentDirty) {
+    documentDirty = true;
+    updateDocTitle();
+  }
+}
+
+function markClean(): void {
+  documentDirty = false;
+  updateDocTitle();
+}
+
+function setDocument(text: string, fileName: string, handle: FileSystemFileHandle | null = null): void {
+  clearHeaderOverrides();
+  sourceInput.value = text;
+  currentFileName = fileName.endsWith(".txt") || fileName.endsWith(".cmnt") ? fileName : `${fileName}.txt`;
+  currentFileHandle = handle;
+  markClean();
+  render();
+}
+
+function baseName(): string {
+  return currentFileName.replace(/\.(txt|cmnt)$/i, "") || "score";
 }
 
 /** Selects the given 1-indexed source line in the textarea and scrolls it into view. */
@@ -92,8 +148,6 @@ function populateSchoolSelect(): void {
   schoolSelect.value = DEFAULT_SCHOOL_ID;
 }
 
-/** Applies a school's CSS class to #score-page and its suggested language
- *  override to the Language select, then re-renders. */
 function applySchool(id: SchoolId): void {
   currentSchool = schoolById(id);
   scorePage.classList.remove(...SCHOOL_CLASSES);
@@ -102,19 +156,23 @@ function applySchool(id: SchoolId): void {
   render();
 }
 
-/** Whether the rendered score uses Tamil anywhere, so the preview can switch to a
- *  Tamil-friendly font family regardless of which school is selected. */
-function usesTamilScript(items: LayoutItem[], forceScript: Script | undefined): boolean {
-  if (forceScript === "tamil") return true;
-  if (forceScript !== undefined) return false; // forced to English/roman
+function activeIndicScript(items: LayoutItem[], forceScript: Script | undefined): Script {
+  if (forceScript !== undefined) return forceScript;
   for (const item of items) {
     if (item instanceof VisualRow) {
-      if (scriptFor(item.language.split(":")[0]) === "tamil") return true;
+      const s = scriptFor(item.language.split(":")[0]);
+      if (s != null) return s;
     } else if (item instanceof VisualHeading) {
-      if (scriptFor(item.heading.language?.split(":")[0] ?? null) === "tamil") return true;
+      const s = scriptFor(item.heading.language?.split(":")[0] ?? null);
+      if (s != null) return s;
     }
   }
-  return false;
+  return null;
+}
+
+function applyLangFontClass(script: Script): void {
+  scorePage.classList.remove(...LANG_CLASSES);
+  if (script != null) scorePage.classList.add(`lang-${script}`);
 }
 
 function findRagamTalamHeading(items: LayoutItem[]) {
@@ -152,7 +210,7 @@ function clearHeaderOverrides(): void {
 
 function render(): void {
   const text = sourceInput.value;
-  const forceScript = forceScriptFor(langSelect.value as LangOverride);
+  const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
 
   try {
     const song = parse(text);
@@ -169,8 +227,8 @@ function render(): void {
       },
     });
     scorePage.innerHTML = svg;
-    scorePage.classList.toggle("lang-tamil", usesTamilScript(items, forceScript));
-    setStatusOk();
+    applyLangFontClass(activeIndicScript(items, forceScript));
+    setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Parse error: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
@@ -199,14 +257,11 @@ function scheduleRender(): void {
 function loadFixture(key: string): void {
   const text = FIXTURES[key];
   if (text == null) return;
-  clearHeaderOverrides();
-  sourceInput.value = text;
-  render();
+  setDocument(text, `${key}.txt`, null);
 }
 
-/** CSS custom properties `.cmnt-score` relies on -- resolved from the live,
- *  currently-applied school/language classes so exported files render
- *  identically to the on-screen preview without depending on styles.css. */
+// ---- File: save / open / export ------------------------------------------------
+
 const EXPORT_CSS_VARS = [
   "--page-bg",
   "--swara-color",
@@ -223,10 +278,6 @@ function currentSvgElement(): SVGSVGElement | null {
   return scorePage.querySelector("svg");
 }
 
-/** Serializes the currently rendered SVG as a standalone document: resolved
- *  CSS variables are inlined on the root element and the full stylesheet
- *  (class rules referencing those variables) is embedded, so the file opens
- *  correctly outside this app and rasterizes correctly via <canvas>. */
 function buildStandaloneSvgMarkup(): string | null {
   const svgEl = currentSvgElement();
   if (!svgEl) return null;
@@ -252,17 +303,103 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function writeTextToHandle(handle: FileSystemFileHandle, text: string): Promise<void> {
+  const writable = await handle.createWritable();
+  await writable.write(text);
+  await writable.close();
+}
+
+function saveTextDownload(fileName: string): void {
+  const blob = new Blob([sourceInput.value], { type: "text/plain;charset=utf-8" });
+  downloadBlob(blob, fileName);
+  currentFileName = fileName;
+  currentFileHandle = null;
+  markClean();
+  setStatusOk(`Downloaded ${fileName}`);
+}
+
+async function saveFile(forceSaveAs: boolean): Promise<void> {
+  const text = sourceInput.value;
+  const picker = (window as unknown as {
+    showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle>;
+  }).showSaveFilePicker;
+
+  if (!forceSaveAs && currentFileHandle != null) {
+    try {
+      await writeTextToHandle(currentFileHandle, text);
+      markClean();
+      setStatusOk(`Saved ${currentFileName}`);
+      return;
+    } catch {
+      // fall through to picker / download
+    }
+  }
+
+  if (typeof picker === "function") {
+    try {
+      const handle = await picker({
+        suggestedName: currentFileName,
+        types: [
+          {
+            description: "CMNT song text",
+            accept: { "text/plain": [".txt", ".cmnt"] },
+          },
+        ],
+      });
+      await writeTextToHandle(handle, text);
+      currentFileHandle = handle;
+      currentFileName = handle.name || currentFileName;
+      markClean();
+      setStatusOk(`Saved ${currentFileName}`);
+      return;
+    } catch (err) {
+      // User cancelled the picker
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    }
+  }
+
+  // Safari / Firefox: download the .txt (browser chooses the Downloads folder).
+  const name =
+    forceSaveAs || currentFileName === "Untitled.txt"
+      ? window.prompt("Save song as:", currentFileName) ?? ""
+      : currentFileName;
+  if (!name.trim()) return;
+  const fileName = /\.(txt|cmnt)$/i.test(name.trim()) ? name.trim() : `${name.trim()}.txt`;
+  saveTextDownload(fileName);
+}
+
+function newSong(): void {
+  if (documentDirty && !window.confirm("Discard unsaved changes and start a new song?")) return;
+  setDocument(NEW_SONG_TEMPLATE, "Untitled.txt", null);
+  setStatusOk("New song — File → Save to download a .txt");
+}
+
+function openFileDialog(): void {
+  if (documentDirty && !window.confirm("Discard unsaved changes and open another file?")) return;
+  openFileInput.value = "";
+  openFileInput.click();
+}
+
+async function openFileFromInput(file: File): Promise<void> {
+  const text = await file.text();
+  setDocument(text, file.name || "song.txt", null);
+  setStatusOk(`Opened ${currentFileName}`);
+}
+
 function exportSvg(): void {
+  render();
   const markup = buildStandaloneSvgMarkup();
   if (markup == null) {
     setStatusError("Export SVG failed: nothing rendered yet");
     return;
   }
   const blob = new Blob([markup], { type: "image/svg+xml;charset=utf-8" });
-  downloadBlob(blob, `${fixtureSelect.value || "score"}.svg`);
+  downloadBlob(blob, `${baseName()}.svg`);
+  setStatusOk(`Exported ${baseName()}.svg`);
 }
 
 function exportPng(): void {
+  render();
   const svgEl = currentSvgElement();
   const markup = buildStandaloneSvgMarkup();
   if (svgEl == null || markup == null) {
@@ -271,7 +408,7 @@ function exportPng(): void {
   }
   const width = Number(svgEl.getAttribute("width")) || svgEl.viewBox.baseVal.width || 1100;
   const height = Number(svgEl.getAttribute("height")) || svgEl.viewBox.baseVal.height || 800;
-  const scale = 2; // rasterize at 2x for crisper PNGs on high-DPI displays
+  const scale = 2;
   const svgBlob = new Blob([markup], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(svgBlob);
   const img = new Image();
@@ -289,8 +426,10 @@ function exportPng(): void {
     ctx.drawImage(img, 0, 0, width, height);
     canvas.toBlob((blob) => {
       URL.revokeObjectURL(url);
-      if (blob) downloadBlob(blob, `${fixtureSelect.value || "score"}.png`);
-      else setStatusError("Export PNG failed: could not encode canvas");
+      if (blob) {
+        downloadBlob(blob, `${baseName()}.png`);
+        setStatusOk(`Exported ${baseName()}.png`);
+      } else setStatusError("Export PNG failed: could not encode canvas");
     }, "image/png");
   };
   img.onerror = () => {
@@ -300,7 +439,175 @@ function exportPng(): void {
   img.src = url;
 }
 
-fixtureSelect.addEventListener("change", () => loadFixture(fixtureSelect.value));
+/** PDF via the browser print dialog (Save as PDF). */
+function exportPdf(): void {
+  render();
+  if (currentSvgElement() == null) {
+    setStatusError("Export PDF failed: nothing rendered yet");
+    return;
+  }
+  setStatusOk("Print dialog: choose “Save as PDF” as the destination");
+  window.print();
+}
+
+// ---- Insert helpers ------------------------------------------------------------
+
+function insertAtCursor(text: string): void {
+  const start = sourceInput.selectionStart ?? sourceInput.value.length;
+  const end = sourceInput.selectionEnd ?? start;
+  const before = sourceInput.value.slice(0, start);
+  const after = sourceInput.value.slice(end);
+  sourceInput.value = before + text + after;
+  const pos = start + text.length;
+  sourceInput.focus();
+  sourceInput.setSelectionRange(pos, pos);
+  markDirty();
+  scheduleRender();
+}
+
+function insertGamakaCluster(tag: string): void {
+  const selected = sourceInput.value.slice(sourceInput.selectionStart, sourceInput.selectionEnd);
+  if (selected.trim()) insertAtCursor(`{${selected}}(${tag})`);
+  else insertAtCursor(`{ }(${tag})`);
+}
+
+function promptAndInsert(title: string, template: (value: string) => string, initial = ""): void {
+  const value = window.prompt(title, initial);
+  if (value == null || value.trim() === "") return;
+  insertAtCursor(template(value.trim()));
+}
+
+function promptTala(): void {
+  const list = TALA_NAMES.join(", ");
+  const value = window.prompt(`Tala name (e.g. Adi, Rupaka).\nKnown: ${list}`, "Adi");
+  if (value == null || value.trim() === "") return;
+  insertAtCursor(`Tala: ${value.trim()}\n`);
+}
+
+function promptSubscript(sub: boolean): void {
+  const n = window.prompt(sub ? "Subscript digit 0-9 (e.g. 2 → ₂ for R₂)" : "Superscript digit 0-9", "2");
+  if (n == null || !/^[0-9]$/.test(n)) return;
+  const glyphs = sub ? "₀₁₂₃₄₅₆₇₈₉" : "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  insertAtCursor(glyphs[Number(n)]!);
+}
+
+// ---- Menubar -------------------------------------------------------------------
+
+function sampleMenuItems(): MenuItem[] {
+  return Object.keys(FIXTURES).map((key) => ({
+    label: key,
+    action: () => {
+      if (documentDirty && !window.confirm("Discard unsaved changes and load this sample?")) return;
+      fixtureSelect.value = key;
+      loadFixture(key);
+    },
+  }));
+}
+
+function buildAppMenus(): void {
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const mod = isMac ? "⌘" : "Ctrl+";
+
+  const gamakaItems: MenuItem[] = [
+    { label: "Kampita (shake)  ~", action: () => insertAtCursor("~") },
+    { label: "Kampita (heavy)  ~~", action: () => insertAtCursor("~~") },
+    { label: "Slide up (etRa jAru)  /", action: () => insertAtCursor("/") },
+    { label: "Slide up, long  //", action: () => insertAtCursor("//") },
+    { label: "Slide down (iRakka jAru)  \\", action: () => insertAtCursor("\\") },
+    { label: "Slide down, long  \\\\", action: () => insertAtCursor("\\\\") },
+    { label: "Ravai  ^", action: () => insertAtCursor("^") },
+    { label: "Sustain  =", action: () => insertAtCursor("=") },
+    { separator: true },
+    { label: "Volume soft  (v1)", action: () => insertAtCursor("(v1)") },
+    { label: "Volume medium  (v2)", action: () => insertAtCursor("(v2)") },
+    { label: "Volume loud  (v3)", action: () => insertAtCursor("(v3)") },
+    { separator: true },
+    { label: "Sphurita  (sp)", action: () => insertAtCursor("(sp)") },
+    { label: "Pratyaghata  (pr)", action: () => insertAtCursor("(pr)") },
+    { label: "Nokku / tirupa  (w)", action: () => insertAtCursor("(w)") },
+    { label: "VaLi  (vl)", action: () => insertAtCursor("(vl)") },
+    { separator: true },
+    { label: "Khandippu cluster  { }(kh)", action: () => insertGamakaCluster("kh") },
+    { label: "Odukkal cluster  { }(od)", action: () => insertGamakaCluster("od") },
+    { label: "Orikai cluster  { }(or)", action: () => insertGamakaCluster("or") },
+    { label: "VaLi cluster  { }(vl)", action: () => insertGamakaCluster("vl") },
+  ];
+
+  const languageItems: MenuItem[] = [
+    { label: "English (roman)", action: () => insertAtCursor("Language: English\n") },
+    { label: "Tamil", action: () => insertAtCursor("Language: Tamil\n") },
+    { label: "Telugu", action: () => insertAtCursor("Language: Telugu\n") },
+    { label: "Kannada", action: () => insertAtCursor("Language: Kannada\n") },
+    { label: "Sanskrit", action: () => insertAtCursor("Language: Sanskrit\n") },
+  ];
+
+  buildMenubar(menubarEl, [
+    {
+      label: "File",
+      items: [
+        { label: "New Song…", shortcut: `${mod}N`, action: newSong },
+        { label: "Open…", shortcut: `${mod}O`, action: openFileDialog },
+        { label: "Save (.txt)", shortcut: `${mod}S`, action: () => void saveFile(false) },
+        { label: "Save As…", shortcut: `${mod}⇧S`, action: () => void saveFile(true) },
+        { separator: true },
+        { label: "Update Preview", shortcut: `${mod}Enter`, action: render },
+        { label: "Open Sample", submenu: sampleMenuItems() },
+        { separator: true },
+        { label: "Export as SVG…", action: exportSvg },
+        { label: "Export as PNG…", action: exportPng },
+        { label: "Export as PDF…", action: exportPdf },
+      ],
+    },
+    {
+      label: "Insert",
+      items: [
+        { label: "Gamaka", submenu: gamakaItems },
+        { label: "Language", submenu: languageItems },
+        { separator: true },
+        {
+          label: "Raagam Name…",
+          action: () => promptAndInsert("Raagam name (roman catalogue spelling)", (v) => `Raagam: ${v}\n`, "Sri"),
+        },
+        { label: "Tala Name…", action: promptTala },
+        {
+          label: "Melakarta Number…",
+          action: () =>
+            promptAndInsert("Melakarta number (1–72)", (v) => `Melakarta: ${v}\n`, "15"),
+        },
+        {
+          label: "Cycles Per Row…",
+          action: () => promptAndInsert("Cycles per row (e.g. 1 or 2)", (v) => `CyclesPerRow: ${v}\n`, "1"),
+        },
+        { separator: true },
+        {
+          label: "Heading…",
+          action: () =>
+            promptAndInsert('Heading text', (v) => `Heading: "${v}",bold,center,14\n`, "pallavi:"),
+        },
+        {
+          label: "Swara line (S:)",
+          action: () => insertAtCursor("S: s r g m | p d n s'\n"),
+        },
+        {
+          label: "Lyric line (L:)",
+          action: () => insertAtCursor("L: sa ri ga ma pa da ni sa\n"),
+        },
+        { separator: true },
+        { label: "Subscript Number…", action: () => promptSubscript(true) },
+        { label: "Superscript Number…", action: () => promptSubscript(false) },
+      ],
+    },
+  ]);
+}
+
+// ---- Events --------------------------------------------------------------------
+
+fixtureSelect.addEventListener("change", () => {
+  if (documentDirty && !window.confirm("Discard unsaved changes and load this sample?")) {
+    return;
+  }
+  loadFixture(fixtureSelect.value);
+});
 langSelect.addEventListener("change", () => {
   clearHeaderOverrides();
   render();
@@ -310,8 +617,6 @@ schoolSelect.addEventListener("change", () => {
   applySchool(schoolSelect.value as SchoolId);
 });
 renderBtn.addEventListener("click", render);
-exportSvgBtn.addEventListener("click", exportSvg);
-exportPngBtn.addEventListener("click", exportPng);
 ragamDisplay.addEventListener("input", () => {
   ragamNameDirty = true;
   scheduleRender();
@@ -324,7 +629,14 @@ resetHeadersBtn.addEventListener("click", () => {
   clearHeaderOverrides();
   render();
 });
-sourceInput.addEventListener("input", scheduleRender);
+openFileInput.addEventListener("change", () => {
+  const file = openFileInput.files?.[0];
+  if (file) void openFileFromInput(file);
+});
+sourceInput.addEventListener("input", () => {
+  markDirty();
+  scheduleRender();
+});
 sourceInput.addEventListener("keydown", (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
     ev.preventDefault();
@@ -332,6 +644,32 @@ sourceInput.addEventListener("keydown", (ev) => {
   }
 });
 
+window.addEventListener("keydown", (ev) => {
+  const mod = ev.metaKey || ev.ctrlKey;
+  if (!mod) return;
+  const key = ev.key.toLowerCase();
+  if (key === "s") {
+    ev.preventDefault();
+    void saveFile(ev.shiftKey);
+  } else if (key === "o") {
+    ev.preventDefault();
+    openFileDialog();
+  } else if (key === "n") {
+    ev.preventDefault();
+    newSong();
+  }
+});
+
+window.addEventListener("beforeunload", (ev) => {
+  if (!documentDirty) return;
+  ev.preventDefault();
+  ev.returnValue = "";
+});
+
 populateSchoolSelect();
+buildAppMenus();
+updateDocTitle();
 sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
+currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;
+markClean();
 applySchool(schoolSelect.value as SchoolId);
