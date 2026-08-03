@@ -12,7 +12,7 @@ import type { Cell, LayoutItem, VisualRow } from "../core/Layout.js";
 import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
 import type { Heading } from "../model/Heading.js";
 import type { Script } from "../core/Translit.js";
-import { scriptFor, transliterateHeading, transliterateSwara, transliterateText } from "../core/Translit.js";
+import { scriptFor, transliterate, transliterateHeading, transliterateSwara } from "../core/Translit.js";
 import { Fraction } from "../model/Fraction.js";
 
 export type SvgScoreOptions = {
@@ -489,7 +489,9 @@ function renderRow(
         const lyric = li < c.lyrics.length ? c.lyrics[li]! : "";
         if (BLANK_LYRICS.has(lyric)) continue;
         const wordStart = li < c.lyricWordStart.length ? c.lyricWordStart[li]! : true;
-        const lyricDisplay = transliterateText(lyric, script, wordStart);
+        // Match JAR NotationCanvas: per-note lyrics go through transliterate(),
+        // not transliterateText(), so @/!/~n/#n markers stay on the syllable.
+        const lyricDisplay = transliterate(lyric, script, wordStart);
         const lineY = baselineY + swaraToLyric + li * lyricLineHeight;
         parts.push(
           `<text class="cmnt-lyric"${lyricStyle} x="${fmt(cx)}" y="${fmt(lineY)}" text-anchor="middle">${escapeXml(lyricDisplay)}</text>`,

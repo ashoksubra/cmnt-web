@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { scriptFor, transliterateSwara, transliterateText } from "@cmnt/core/Translit";
+import {
+  scriptFor,
+  transliterate,
+  transliterateSwara,
+  transliterateText,
+} from "@cmnt/core/Translit";
 
 describe("scriptFor", () => {
   it("maps known language names to their script", () => {
@@ -53,6 +58,46 @@ describe("transliterateSwara", () => {
   });
 });
 
+describe("transliterate (Tamil nasals — matches JAR)", () => {
+  it("maps #n / ~n / @n / !n escape hatches", () => {
+    expect(transliterate("#n", "tamil")).toBe("ங்");
+    expect(transliterate("~n", "tamil")).toBe("ஞ்");
+    expect(transliterate("@n", "tamil")).toBe("ந்");
+    expect(transliterate("!n", "tamil")).toBe("ந்");
+    expect(transliterate("@nA", "tamil")).toBe("நா");
+    expect(transliterate("@nE", "tamil")).toBe("நே");
+  });
+
+  it("treats lone n as ni, with dental vs alveolar by wordStart", () => {
+    expect(transliterate("n", "tamil", true)).toBe("நி");
+    expect(transliterate("n", "tamil", false)).toBe("னி");
+    expect(transliterate("nA", "tamil", true)).toBe("நா");
+    expect(transliterate("nA", "tamil", false)).toBe("னா");
+  });
+
+  it("keeps #n attached inside a syllable (sa#ngam → ஸங்கம்)", () => {
+    expect(transliterate("sa#ngam", "tamil")).toBe("ஸங்கம்");
+    expect(transliterate("#nga", "tamil")).toBe("ங்க");
+    expect(transliterate("~nja", "tamil")).toBe("ஞ்ஜ");
+    expect(transliterate("ku#n", "tamil")).toBe("குங்");
+  });
+
+  it("uses dental ந before dental stops and after liquid/glides", () => {
+    expect(transliterate("santham", "tamil")).toBe("ஸந்தம்");
+    expect(transliterate("vandhitha", "tamil")).toBe("வந்தித");
+  });
+
+  it("uses alveolar ன் in bare clusters otherwise (janyam)", () => {
+    expect(transliterate("janyam", "tamil")).toBe("ஜன்யம்");
+  });
+
+  it("strips markers for english/null script", () => {
+    expect(transliterate("@nE", null)).toBe("nE");
+    expect(transliterate("sa#ngam", scriptFor("english"))).toBe("sangam");
+    expect(transliterate("sa~ngam", null)).toBe("sangam");
+  });
+});
+
 describe("transliterateText", () => {
   it("transliterates common maha_ganapatim lyric syllables into Tamil", () => {
     expect(transliterateText("ma", "tamil")).toBe("ம");
@@ -61,6 +106,15 @@ describe("transliterateText", () => {
     expect(transliterateText("Na", "tamil")).toBe("ண");
     expect(transliterateText("pa", "tamil")).toBe("ப");
     expect(transliterateText("tim", "tamil")).toBe("திம்");
+  });
+
+  it("keeps @/!/~n/#n markers attached across multi-syllable text", () => {
+    expect(transliterateText("@nA", "tamil")).toBe("நா");
+    expect(transliterateText("#n", "tamil")).toBe("ங்");
+    expect(transliterateText("~n", "tamil")).toBe("ஞ்");
+    expect(transliterateText("sa#ngam", "tamil")).toBe("ஸங்கம்");
+    // Capital S = palatal/retroflex sibilant (ஶ); lowercase s = dental ஸ.
+    expect(transliterateText("Sa #n kha", "tamil")).toBe("ஶ ங் க");
   });
 
   it("returns the roman text unchanged for english or null script", () => {

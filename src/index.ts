@@ -27,6 +27,7 @@ export { renderScoreSvg, alignSection, alignAllSections } from "./render/SvgScor
 export type { SvgScoreOptions } from "./render/SvgScore.js";
 export {
   scriptFor,
+  transliterate,
   transliterateSwara,
   transliterateText,
   transliterateHeading,

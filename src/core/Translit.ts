@@ -603,7 +603,7 @@ function stripTransliterationMarkers(s: string): string {
  *   word and alveolar ன everywhere else (a distinction Tamil makes that the
  *   other supported scripts don't).
  */
-function transliterate(roman: string, script: Script, wordStart = true): string {
+export function transliterate(roman: string, script: Script, wordStart = true): string {
   if (roman == null || roman === "") return roman;
   // No target script means English/roman output -- the @/!/~n/#n markers only mean
   // something when transliterating into an Indic script (word-start override, bare
@@ -732,6 +732,12 @@ export function transliterateText(roman: string, script: Script, wordStart = tru
   let out = "";
   let word = "";
   let firstWord = true;
+  const flush = (): void => {
+    if (word.length === 0) return;
+    out += transliterate(word, script, firstWord ? wordStart : true);
+    firstWord = false;
+    word = "";
+  };
   for (let i = 0; i <= roman.length; i++) {
     const c = i < roman.length ? roman[i]! : " ";
     if (/[a-zA-Z]/.test(c)) {
@@ -743,12 +749,29 @@ export function transliterateText(roman: string, script: Script, wordStart = tru
       // splitting into two separately-transliterated words, which would garble
       // the sandhi at the join and leave a stray hyphen in the script output.
       continue;
+    } else if (
+      (c === "@" || c === "!") &&
+      i + 1 < roman.length &&
+      (/[a-zA-Z]/.test(roman[i + 1]!) ||
+        ((roman[i + 1] === "~" || roman[i + 1] === "#") &&
+          i + 2 < roman.length &&
+          /[nN]/.test(roman[i + 2]!)))
+    ) {
+      // Word-start override markers must stay attached to the following syllable
+      // ("@nA", "!n") so transliterate() can force dental ந. Emitting them as
+      // separators left a literal "@"/"!" in the output (JAR transliterateText
+      // has the same gap; lyrics go through transliterate() instead).
+      word += c;
+    } else if (
+      (c === "~" || c === "#") &&
+      i + 1 < roman.length &&
+      /[nN]/.test(roman[i + 1]!)
+    ) {
+      // Bare velar/palatal nasal escapes ("#n" → ங், "~n" → ஞ்) must stay in the
+      // phonetic stream; otherwise the scanner splits "sa#ngam" into "sa" + "#" + "ngam".
+      word += c;
     } else {
-      if (word.length > 0) {
-        out += transliterate(word, script, firstWord ? wordStart : true);
-        firstWord = false;
-        word = "";
-      }
+      flush();
       if (i < roman.length) out += c;
     }
   }
