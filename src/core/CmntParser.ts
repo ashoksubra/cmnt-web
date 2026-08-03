@@ -794,5 +794,12 @@ class Parser {
 }
 
 export function parse(text: string): Song {
-  return new Parser().doParse(YamlFrontMatter.preprocess(text));
+  let preprocessed: string;
+  try {
+    preprocessed = YamlFrontMatter.preprocess(text);
+  } catch (e) {
+    if (e instanceof YamlFrontMatter.YamlFrontMatterError) throw new ParseException(e.message, 0);
+    throw e;
+  }
+  return new Parser().doParse(preprocessed);
 }

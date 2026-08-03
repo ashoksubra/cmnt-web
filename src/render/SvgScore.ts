@@ -13,6 +13,7 @@ import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
 import type { Heading } from "../model/Heading.js";
 import type { Script } from "../core/Translit.js";
 import { scriptFor, transliterateHeading, transliterateSwara, transliterateText } from "../core/Translit.js";
+import { Fraction } from "../model/Fraction.js";
 
 export type SvgScoreOptions = {
   /** Usable content width (excluding side margins), in px. */
@@ -27,6 +28,17 @@ export type SvgScoreOptions = {
    * lets the user force Tamil/English regardless of the source's directives.
    */
   forceScript?: Script;
+  /**
+   * Multiplies the duration-based swara cell width (see `UNIT_WIDTH`). Lets
+   * "school" presets (`src/theme/schools.ts`) request denser/looser column
+   * spacing without changing the alignment algorithm. Default 1.
+   */
+  unitWidthScale?: number;
+  /**
+   * Multiplies each row's `rowSpacing` (vertical padding below the
+   * lyric baseline) for the same density-preset purpose. Default 1.
+   */
+  rowSpacingScale?: number;
 };
 
 /** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
@@ -58,8 +70,12 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
   const contentWidth = options.contentWidth ?? DEFAULT_CONTENT_WIDTH;
   const marginX = options.marginX ?? DEFAULT_MARGIN_X;
   const marginTop = options.marginTop ?? DEFAULT_MARGIN_TOP;
+  const unitWidthScale = options.unitWidthScale ?? 1;
+  const rowSpacingScale = options.rowSpacingScale ?? 1;
   const usableWidth = Math.max(50, contentWidth - ROW_LABEL_GUTTER);
   const width = contentWidth + marginX * 2;
+
+  const alignedWidths = alignAllSections(items, usableWidth, unitWidthScale);
 
   const body: string[] = [];
   let y = marginTop;
@@ -85,7 +101,8 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
       );
       y += 22;
     } else {
-      const res = renderRow(item, marginX, usableWidth, y, options.forceScript);
+      const widths = alignedWidths.get(item) ?? item.cells.map((c) => measureCellWidth(c, unitWidthScale));
+      const res = renderRow(item, marginX, y, options.forceScript, widths, rowSpacingScale);
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     }
@@ -147,11 +164,181 @@ function renderHeading(
   return { svg: parts.join("\n"), nextY: ly + 4 };
 }
 
-function measureCellWidth(c: Cell): number {
+function measureCellWidth(c: Cell, unitWidthScale = 1): number {
   if (c.kind === "marker") return MARKER_WIDTH;
   if (c.kind === "gap") return GAP_WIDTH;
   if (c.kind === "gati") return GATI_WIDTH;
-  return Math.max(MIN_SWARA_WIDTH, c.duration.doubleValue() * UNIT_WIDTH);
+  return Math.max(MIN_SWARA_WIDTH, c.duration.doubleValue() * UNIT_WIDTH * unitWidthScale);
+}
+
+/**
+ * Section-aligned anga columns (ported from the JAR's
+ * `NotationCanvas.alignSection`/`alignAllSections`). A "section" is a run of
+ * consecutive `VisualRow`s uninterrupted by a heading/break/page-break.
+ * Within a section, content columns at the same span index (between anga
+ * markers) share a target width sized by total swara duration -- not forced
+ * equal, so e.g. Rupaka's 1+2-akshara angas stay proportional instead of
+ * bunching madhyamakalam into an equal-width column.
+ */
+type Span = { start: number; end: number; marker: boolean; width: number };
+
+function splitSpans(row: VisualRow, cw: number[]): Span[] {
+  const spans: Span[] = [];
+  let i = 0;
+  while (i < row.cells.length) {
+    if (row.cells[i]!.kind === "marker") {
+      spans.push({ start: i, end: i + 1, marker: true, width: cw[i]! });
+      i++;
+    } else {
+      let j = i;
+      let w = 0;
+      while (j < row.cells.length && row.cells[j]!.kind !== "marker") {
+        w += cw[j]!;
+        j++;
+      }
+      spans.push({ start: i, end: j, marker: false, width: w });
+      i = j;
+    }
+  }
+  return spans;
+}
+
+/** Total akshara duration of swara cells inside a content span (0 if gap-only). */
+function spanDuration(row: VisualRow, s: Span): number {
+  let d = 0;
+  for (let i = s.start; i < s.end; i++) {
+    const c = row.cells[i]!;
+    if (c.kind === "swara") d += Math.max(c.duration.doubleValue(), 0);
+  }
+  return d;
+}
+
+/**
+ * Spread a content/marker span to `target` width. Swara cells are weighted by
+ * akshara duration so equal-time notes (typical madhyamakalam) get even
+ * spacing; gaps stay light so they don't create uneven "air" between notes.
+ */
+function distributeSpan(row: VisualRow, natural: number[], out: number[], start: number, end: number, target: number): void {
+  let weightSum = 0;
+  const weights: number[] = new Array(Math.max(0, end - start)).fill(0);
+  for (let i = start; i < end; i++) {
+    const c = row.cells[i]!;
+    let w: number;
+    if (c.kind === "gap") {
+      w = 0.12;
+    } else if (c.kind === "swara" && c.duration.gt(Fraction.ZERO)) {
+      w = Math.max(c.duration.doubleValue(), 1 / 64);
+    } else {
+      w = Math.max(natural[i]!, 1.0);
+    }
+    weights[i - start] = w;
+    weightSum += w;
+  }
+  if (weightSum <= 0) {
+    const each = target / Math.max(1, end - start);
+    for (let i = start; i < end; i++) out[i] = each;
+    return;
+  }
+  for (let i = start; i < end; i++) {
+    out[i] = weights[i - start]! * (target / weightSum);
+  }
+}
+
+/** Aligns anga columns across a single section's rows; returns each row's per-cell widths. */
+export function alignSection(rows: VisualRow[], targetWidth: number, unitWidthScale = 1): Map<VisualRow, number[]> {
+  const natural = new Map<VisualRow, number[]>();
+  let maxSpans = 0;
+  const allSpans: Span[][] = [];
+
+  for (const row of rows) {
+    const cw = row.cells.map((c) => measureCellWidth(c, unitWidthScale));
+    natural.set(row, cw);
+    const spans = splitSpans(row, cw);
+    allSpans.push(spans);
+    maxSpans = Math.max(maxSpans, spans.length);
+  }
+
+  const spanTarget: number[] = new Array(maxSpans).fill(0);
+  const isMarkerSpan: boolean[] = new Array(maxSpans).fill(false);
+  const spanDur: number[] = new Array(maxSpans).fill(0);
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!;
+    const spans = allSpans[r]!;
+    for (let i = 0; i < spans.length; i++) {
+      const s = spans[i]!;
+      spanTarget[i] = Math.max(spanTarget[i]!, s.width);
+      if (s.marker) isMarkerSpan[i] = true;
+      else spanDur[i] = Math.max(spanDur[i]!, spanDuration(row, s));
+    }
+  }
+
+  // Size content columns by duration so a 2-akshara anga is ~2x a 1-akshara anga.
+  // Floor each column at its natural max so glyphs never collide.
+  let durSum = 0;
+  let naturalContent = 0;
+  let markerTotal = 0;
+  let trailingNatural = 0; // gap-only tails after final || -- keep tiny
+  for (let i = 0; i < maxSpans; i++) {
+    if (isMarkerSpan[i]) markerTotal += spanTarget[i]!;
+    else if (spanDur[i]! > 0) {
+      durSum += spanDur[i]!;
+      naturalContent += spanTarget[i]!;
+    } else {
+      trailingNatural += spanTarget[i]!;
+    }
+  }
+  // Budget for timed content only; don't let empty trailing gaps claim an anga's width.
+  const contentBudget = Math.max(naturalContent, targetWidth - markerTotal - trailingNatural);
+  if (durSum > 0 && contentBudget > 0) {
+    for (let i = 0; i < maxSpans; i++) {
+      if (isMarkerSpan[i] || spanDur[i]! <= 0) continue;
+      const proportional = contentBudget * (spanDur[i]! / durSum);
+      spanTarget[i] = Math.max(spanTarget[i]!, proportional);
+    }
+  }
+
+  let total = 0;
+  for (const w of spanTarget) total += w;
+  if (total > targetWidth && total > 0) {
+    const scale = targetWidth / total;
+    for (let i = 0; i < spanTarget.length; i++) spanTarget[i]! *= scale;
+  }
+
+  const out = new Map<VisualRow, number[]>();
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!;
+    const nat = natural.get(row)!;
+    const aligned: number[] = new Array(nat.length).fill(0);
+    const spans = allSpans[r]!;
+    for (let si = 0; si < spans.length; si++) {
+      const s = spans[si]!;
+      const target = si < spanTarget.length ? spanTarget[si]! : s.width;
+      distributeSpan(row, nat, aligned, s.start, s.end, target);
+    }
+    out.set(row, aligned);
+  }
+  return out;
+}
+
+/** Groups `items` into sections (runs of consecutive `VisualRow`s) and aligns each independently. */
+export function alignAllSections(items: LayoutItem[], targetWidth: number, unitWidthScale = 1): Map<VisualRow, number[]> {
+  const out = new Map<VisualRow, number[]>();
+  let section: VisualRow[] = [];
+  const flush = (): void => {
+    if (section.length === 0) return;
+    const aligned = alignSection(section, targetWidth, unitWidthScale);
+    for (const [row, widths] of aligned) out.set(row, widths);
+    section = [];
+  };
+  for (const it of items) {
+    if (it instanceof VisualHeading || it instanceof VisualBreak || it instanceof VisualPageBreak) {
+      flush();
+    } else {
+      section.push(it);
+    }
+  }
+  flush();
+  return out;
 }
 
 function renderSpeedBeam(
@@ -197,9 +384,10 @@ const BLANK_LYRICS = new Set(["", ".", "-", "_", " "]);
 function renderRow(
   row: VisualRow,
   marginX: number,
-  usableWidth: number,
   y: number,
   forceScript: Script | undefined,
+  widths: number[],
+  rowSpacingScale = 1,
 ): { svg: string; nextY: number } {
   const script = languageScript(row.language, forceScript);
   const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
@@ -218,15 +406,11 @@ function renderRow(
   const topClearance = swaraSize + octaveGap + gamakaSize + gamakaGap * 2 + 8;
   const bottomClearance = swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight;
   const rowBottomPad = Math.min(
-    Math.max(6, lyricSize * 0.35) * row.rowSpacing,
+    Math.max(6, lyricSize * 0.35) * row.rowSpacing * rowSpacingScale,
     Math.max(swaraSize, lyricSize) * 1.5,
   );
   const rowHeight = topClearance + bottomClearance + rowBottomPad;
   const baselineY = y + topClearance;
-
-  const naturalWidths = row.cells.map(measureCellWidth);
-  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
-  const scale = totalNatural > usableWidth && totalNatural > 0 ? usableWidth / totalNatural : 1;
 
   const parts: string[] = [];
   if (row.blockHeading != null && row.blockHeading !== "") {
@@ -247,7 +431,7 @@ function renderRow(
 
   for (let i = 0; i < row.cells.length; i++) {
     const c = row.cells[i]!;
-    const w = naturalWidths[i]! * scale;
+    const w = widths[i]!;
     const cx = x + w / 2;
 
     if (c.kind === "swara") {

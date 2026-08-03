@@ -4,32 +4,41 @@ import type { LayoutItem } from "@cmnt/core/Layout";
 import { renderScoreSvg } from "@cmnt/render/SvgScore";
 import { scriptFor } from "@cmnt/core/Translit";
 import type { Script } from "@cmnt/core/Translit";
+import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
+import type { SchoolId, SchoolPreset } from "@cmnt/theme/schools";
+import stylesCssRaw from "./styles.css?raw";
 
 import smokeAdi from "../fixtures/smoke_adi.txt?raw";
 import smokeAdiTamil from "../fixtures/smoke_adi_tamil.txt?raw";
 import smokeRupaka from "../fixtures/smoke_rupaka.txt?raw";
 import mahaGanapatim from "../fixtures/maha_ganapatim.txt?raw";
+import sankachakra from "../fixtures/sankachakra.txt?raw";
 
 const FIXTURES: Record<string, string> = {
   smoke_adi: smokeAdi,
   smoke_adi_tamil: smokeAdiTamil,
   smoke_rupaka: smokeRupaka,
   maha_ganapatim: mahaGanapatim,
+  sankachakra: sankachakra,
 };
 
 /** "auto" leaves script detection to each row/heading's own `Language:` directive. */
 type LangOverride = "auto" | "english" | "tamil";
 
-const THEME_CLASSES = ["theme-classic-blue", "theme-high-contrast", "theme-night-score"] as const;
+const SCHOOL_CLASSES = SCHOOL_PRESETS.map((s) => s.cssClass);
 
 const fixtureSelect = document.querySelector<HTMLSelectElement>("#fixture-select")!;
 const langSelect = document.querySelector<HTMLSelectElement>("#lang-select")!;
-const themeSelect = document.querySelector<HTMLSelectElement>("#theme-select")!;
+const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")!;
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
+const exportSvgBtn = document.querySelector<HTMLButtonElement>("#export-svg-btn")!;
+const exportPngBtn = document.querySelector<HTMLButtonElement>("#export-png-btn")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
+
+let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 
 function forceScriptFor(lang: LangOverride): Script | undefined {
   if (lang === "auto") return undefined;
@@ -60,13 +69,30 @@ function selectSourceLine(lineNo: number): void {
   sourceInput.scrollTop = Math.max(0, (lineNo - 4) * lineHeight);
 }
 
-function applyTheme(theme: string): void {
-  scorePage.classList.remove(...THEME_CLASSES);
-  scorePage.classList.add(`theme-${theme}`);
+function populateSchoolSelect(): void {
+  schoolSelect.innerHTML = "";
+  for (const preset of SCHOOL_PRESETS) {
+    const opt = document.createElement("option");
+    opt.value = preset.id;
+    opt.textContent = preset.label;
+    opt.title = preset.description;
+    schoolSelect.appendChild(opt);
+  }
+  schoolSelect.value = DEFAULT_SCHOOL_ID;
+}
+
+/** Applies a school's CSS class to #score-page and its suggested language
+ *  override to the Language select, then re-renders. */
+function applySchool(id: SchoolId): void {
+  currentSchool = schoolById(id);
+  scorePage.classList.remove(...SCHOOL_CLASSES);
+  scorePage.classList.add(currentSchool.cssClass);
+  langSelect.value = currentSchool.preferredLang;
+  render();
 }
 
 /** Whether the rendered score uses Tamil anywhere, so the preview can switch to a
- *  Tamil-friendly font family regardless of which theme is selected. */
+ *  Tamil-friendly font family regardless of which school is selected. */
 function usesTamilScript(items: LayoutItem[], forceScript: Script | undefined): boolean {
   if (forceScript === "tamil") return true;
   if (forceScript !== undefined) return false; // forced to English/roman
@@ -87,7 +113,12 @@ function render(): void {
   try {
     const song = parse(text);
     const items = layoutSong(song);
-    const svg = renderScoreSvg(items, { contentWidth: 1100, forceScript });
+    const svg = renderScoreSvg(items, {
+      contentWidth: 1100,
+      forceScript,
+      unitWidthScale: currentSchool.density.unitWidthScale,
+      rowSpacingScale: currentSchool.density.rowSpacingScale,
+    });
     scorePage.innerHTML = svg;
     scorePage.classList.toggle("lang-tamil", usesTamilScript(items, forceScript));
     setStatusOk();
@@ -123,10 +154,108 @@ function loadFixture(key: string): void {
   render();
 }
 
+/** CSS custom properties `.cmnt-score` relies on -- resolved from the live,
+ *  currently-applied school/language classes so exported files render
+ *  identically to the on-screen preview without depending on styles.css. */
+const EXPORT_CSS_VARS = [
+  "--page-bg",
+  "--swara-color",
+  "--lyric-color",
+  "--marker-color",
+  "--heading-color",
+  "--swara-font",
+  "--lyric-font",
+  "--swara-size",
+  "--lyric-size",
+] as const;
+
+function currentSvgElement(): SVGSVGElement | null {
+  return scorePage.querySelector("svg");
+}
+
+/** Serializes the currently rendered SVG as a standalone document: resolved
+ *  CSS variables are inlined on the root element and the full stylesheet
+ *  (class rules referencing those variables) is embedded, so the file opens
+ *  correctly outside this app and rasterizes correctly via <canvas>. */
+function buildStandaloneSvgMarkup(): string | null {
+  const svgEl = currentSvgElement();
+  if (!svgEl) return null;
+  const clone = svgEl.cloneNode(true) as SVGSVGElement;
+  const computed = getComputedStyle(svgEl);
+  const varDecls = EXPORT_CSS_VARS.map((name) => `${name}: ${computed.getPropertyValue(name).trim()}`).join("; ");
+  clone.setAttribute("style", varDecls);
+  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const styleTag = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  styleTag.textContent = stylesCssRaw;
+  clone.insertBefore(styleTag, clone.firstChild);
+  return new XMLSerializer().serializeToString(clone);
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportSvg(): void {
+  const markup = buildStandaloneSvgMarkup();
+  if (markup == null) {
+    setStatusError("Export SVG failed: nothing rendered yet");
+    return;
+  }
+  const blob = new Blob([markup], { type: "image/svg+xml;charset=utf-8" });
+  downloadBlob(blob, `${fixtureSelect.value || "score"}.svg`);
+}
+
+function exportPng(): void {
+  const svgEl = currentSvgElement();
+  const markup = buildStandaloneSvgMarkup();
+  if (svgEl == null || markup == null) {
+    setStatusError("Export PNG failed: nothing rendered yet");
+    return;
+  }
+  const width = Number(svgEl.getAttribute("width")) || svgEl.viewBox.baseVal.width || 1100;
+  const height = Number(svgEl.getAttribute("height")) || svgEl.viewBox.baseVal.height || 800;
+  const scale = 2; // rasterize at 2x for crisper PNGs on high-DPI displays
+  const svgBlob = new Blob([markup], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext("2d");
+    if (ctx == null) {
+      URL.revokeObjectURL(url);
+      setStatusError("Export PNG failed: canvas 2D context unavailable");
+      return;
+    }
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, width, height);
+    canvas.toBlob((blob) => {
+      URL.revokeObjectURL(url);
+      if (blob) downloadBlob(blob, `${fixtureSelect.value || "score"}.png`);
+      else setStatusError("Export PNG failed: could not encode canvas");
+    }, "image/png");
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    setStatusError("Export PNG failed: could not rasterize SVG");
+  };
+  img.src = url;
+}
+
 fixtureSelect.addEventListener("change", () => loadFixture(fixtureSelect.value));
 langSelect.addEventListener("change", render);
-themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
+schoolSelect.addEventListener("change", () => applySchool(schoolSelect.value as SchoolId));
 renderBtn.addEventListener("click", render);
+exportSvgBtn.addEventListener("click", exportSvg);
+exportPngBtn.addEventListener("click", exportPng);
 sourceInput.addEventListener("input", scheduleRender);
 sourceInput.addEventListener("keydown", (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
@@ -135,5 +264,6 @@ sourceInput.addEventListener("keydown", (ev) => {
   }
 });
 
-applyTheme(themeSelect.value);
-loadFixture(fixtureSelect.value);
+populateSchoolSelect();
+sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
+applySchool(schoolSelect.value as SchoolId);

@@ -25,8 +25,12 @@ See also the Cursor canvas timeline in the parent CMNT project conversation.
 - [x] `fixtures/smoke_adi_tamil.txt` — `smoke_adi` with `Language: Tamil`
 - [x] `scripts/write-previews.ts` (`npm run preview:static`) — writes self-contained `preview-out/*.html` snapshots for smoke_adi(_tamil), smoke_rupaka, maha_ganapatim
 - [ ] Font-metric-aware cell width measurement (browser canvas) to match JAR column alignment exactly
-- [ ] Section-aligned anga columns across rows (JAR's `alignSection`) — currently per-row natural widths
+- [x] Section-aligned anga columns across rows (JAR's `alignSection`/`alignAllSections`, ported to `src/render/SvgScore.ts`) — content columns at the same span index within a section (a run of consecutive rows uninterrupted by a heading/break) now share a duration-weighted target width instead of each row using independent natural widths; `tests/align.test.ts` covers the Rupaka 1+2 case and gap-only trailing spans
+- [x] `src/core/YamlFrontMatter.ts` — real `---` front-matter → classic-directive translation, ported from the JAR's `YamlFrontMatter.java` (title/composer headings, Raagam/Tala/DefaultSpeed/CyclesPerRow/Language, nested `style:` → SwaraPrefs/LyricPrefs/HeadingPrefs/GamakaPrefs); files without a leading `---` are unaffected; `tests/yaml.test.ts` covers a minimal header plus the real-world `fixtures/sankachakra.txt`
+- [x] `fixtures/sankachakra.txt` (Muthuswami Dikshitar's Sankachakra gadA pANim, Rupaka, YAML-fronted) wired into the web fixture picker and `scripts/write-previews.ts`
 
-## Iteration 3+
+## Iteration 3 (current)
 
-CSS school presets → playback/hosting → UI chrome.
+- [x] `src/theme/schools.ts` — "School" presets (Classic Print, Tanjore Dense, Roman Teaching, Screen Night) as the primary theming control: each bundles a `#score-page` CSS class (`web/styles.css`), a suggested `Language` override, and a `density` hint (`unitWidthScale`/`rowSpacingScale`) now threaded through `renderScoreSvg`'s `SvgScoreOptions`. The web UI's Theme dropdown was replaced with a School dropdown; the legacy `theme-*` CSS classes remain in the stylesheet but are unused.
+- [x] Export SVG / Export PNG buttons in the web UI — SVG export inlines the live-resolved `.cmnt-score` CSS custom properties plus the full stylesheet so the file is self-contained; PNG export rasterizes that same standalone SVG via an offscreen `<canvas>` (`Image` → `drawImage` → `toBlob`) at 2x for crisper output.
+- [ ] Playback → hosting → further UI chrome.

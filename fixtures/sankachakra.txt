@@ -1,0 +1,66 @@
+---
+title: "Sangkha cakra gadA pANim"
+composer: { text:   "muddu swAmi dIkshitar", italic: false, bold: true }
+Raagam: Purnachandrika
+tala: rupaka
+speed: 0
+CyclesPerRow: 2
+Language:Tamil:granthasa
+style:
+  swara: { color: blue, size: 12 }
+  lyric: { color: black, size: 12 }
+---
+Layout: Krithi,FullWidth
+Orientation: Portrait
+PhraseEnds: show, 20
+
+Heading: "pallavi:",left,bold,14
+
+S: "1." pA  ;  p d  p m g  m rI  rI  g m pA  p m g m  rI  r g m  r r s s r  s n` pA`  dA`  r s  rI ;  s r g m
+L: Sa #n kha - ca - - k ra ga dA - - pA - - - NIm a - - ham - - - - - - - va @n -  dE - SrI - - -
+
+S: "2." pA ;   s' n  p n p  m rI  r g  m d p  m p m g m  rI  r g  m r r s  s r s n` pA`  dA`  r s  rI ;  sA  ;
+L: Sa #n kha - ca - - k ra ga - dA - - pA - - - - NIm a - ham - - - - - - - - va @n - dE - SrI -  
+
+S: sA'  ;  sA'  s' r' s  n pA  pA mA pA ,  d p m rI  rI  ;  g m  r  s  s n` pA  pA`  r s  rI  ;  sA  ;
+L: SA r #nga @na @n - - - da ka kau - s tu - bha  dA - ri - Nam - - - - va @n - dE - - -
+
+Heading: ""
+Heading: "anupallavi:",left,bold,14
+
+S: pA  ;  pA  ;  p m  rI rI  g m  rI  ;  ;  ;  sA ,  r s n`  pA  ;  dA  rI  ;  gA  mA  rI  ; 
+L: pa #n gE - ru - ha ca ra - Nam - - - pa - d mA - - - va tI - ra ma Na m
+
+S: sA  ;  sA  pA  ;  pA  dA  pA  sA'  ;  ;  ;   s' r' s'  n pA  p d p  m rI  p m  g m  rI  ;  ;  ; 
+L: Sa #n ka TA - pa ha ra Nam - - - sa - dA - - bha - - k ta bha - ra - Nam - - -
+
+Heading: "madyama kAlam:",left,bold,14
+
+S: pA  s'  s'  rI'  g'  m'  rI'  sA'  rI'  r'  g'  m'  rI'  s'  n r' sA' rI'  s'  n  s'  n  p  m  r  g  m  r'  sA  n`  p`  r  n`  sA  s  r  g  m 
+L: ku#n ku ma pa#n ki la kA tram pa#n ka ja vi SA la @nE t ram Sa#n  ka ra sa @n nu ti pA t ra m vE #nka Ta va ra da kshE t ra m
+
+Heading: "caraNam:",left,bold,14
+
+S: rI  gA  mA  rI  sA  ; s n`  pA`  ;  rI  rI  ;  gA  mA  rI  sA  ;   sA  m r  gA  ; mA  pA  ; 
+L: ga jE @nd ra sam - ra  - - - ksha Nam - ga ru Da vA - ha vi - ca - ksha Nam - 
+
+S: sA  sA  ;  pA  ;  pa  dA  pA  ;  sA'  sA'  ;  s' r'  s' n  pA  pA  mA  rI  rI  gA  mA  mA  rI  ;
+L: a jE @nd rA - di vi la - ksha Nam - a m ru - ta sA - ra bha - ksha Na m -
+
+S: sA  sA  ;  pA  pA  ;  dA  pA  ;  sA'  sA'  ;  sA'  sA' , r'  s' n pA mA  p m rI  gA  mA  rI  ;
+L: a jA - mi La - pra bhru d ya @nE - ka dA - - sA - - Li sa @n  - ta ra Nam -
+
+S: sA sA' ;- s' r' s' r' s' n p d p d p d p m gA mA rI gA m d pA ; ; pA mA p m g m rI ;
+L: bha jE - pU - - r Na - ca @n - - t ri kA - ng ga gu ru gu hA - - - @nta - ka - ra - Nam -
+
+Heading: "madyama kAlam:",left,bold,14
+
+S: s rI rI r r g m rI-- g m pA d pA m gA m rI s sA sA pA p d p sA' n pA m g m rI s r g m
+
+L: ku jA di gra ha vi hi tam vi ra jA @na dI ta Tas thi tam sa jA tI yA di ra hi tam @ni jA na @n da bO dha hi ta m
+
+
+
+ 
+
+

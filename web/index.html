@@ -28,6 +28,7 @@
               <option value="smoke_adi_tamil">smoke_adi_tamil</option>
               <option value="smoke_rupaka">smoke_rupaka</option>
               <option value="maha_ganapatim">maha_ganapatim</option>
+              <option value="sankachakra">sankachakra</option>
             </select>
           </label>
 
@@ -41,12 +42,8 @@
           </label>
 
           <label class="field">
-            <span>Theme</span>
-            <select id="theme-select">
-              <option value="classic-blue">Classic Blue</option>
-              <option value="high-contrast">High Contrast</option>
-              <option value="night-score">Night Score</option>
-            </select>
+            <span title="School presets are the primary theming control -- see src/theme/schools.ts">School</span>
+            <select id="school-select"></select>
           </label>
 
           <label class="field field-checkbox">
@@ -55,6 +52,8 @@
           </label>
 
           <button id="render-btn" type="button" class="primary-btn">Update</button>
+          <button id="export-svg-btn" type="button" class="secondary-btn">Export SVG</button>
+          <button id="export-png-btn" type="button" class="secondary-btn">Export PNG</button>
         </div>
 
         <textarea
@@ -71,7 +70,7 @@
 
       <section class="preview-pane">
         <div class="preview-scroll">
-          <div id="score-page" class="score-page theme-classic-blue"></div>
+          <div id="score-page" class="score-page"></div>
         </div>
       </section>
     </main>

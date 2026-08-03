@@ -130,6 +130,23 @@ body {
   border-color: #1e40af;
 }
 
+.secondary-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid #cbd2d9;
+  background: #ffffff;
+  color: #1f2933;
+  cursor: pointer;
+  align-self: end;
+}
+
+.secondary-btn:hover {
+  background: #f4f6f9;
+  border-color: #9aa5b1;
+}
+
 .source-input {
   flex: 1;
   min-height: 0;
@@ -347,8 +364,73 @@ body {
   --lyric-font: Georgia, "Times New Roman", serif;
 }
 
+/* ---- School presets: primary theming control (see src/theme/schools.ts) ----
+   Applied to #score-page in place of the legacy theme-* classes above, which
+   remain here unused but harmless for anyone still referencing them. */
+.score-page.school-classic-print {
+  background: #ffffff;
+}
+.score-page.school-classic-print .cmnt-score {
+  --page-bg: #ffffff;
+  --swara-color: #14213d;
+  --lyric-color: #3a5a8c;
+  --marker-color: #1d4ed8;
+  --heading-color: #0f172a;
+  --swara-font: Georgia, "Times New Roman", serif;
+  --lyric-font: Georgia, "Times New Roman", serif;
+  --swara-size: 16px;
+  --lyric-size: 13px;
+}
+
+.score-page.school-tanjore-dense {
+  background: #fbf4e4;
+}
+.score-page.school-tanjore-dense .cmnt-score {
+  --page-bg: #fbf4e4;
+  --swara-color: #3b220f;
+  --lyric-color: #5c3a21;
+  --marker-color: #7a2e0e;
+  --heading-color: #2b1608;
+  --swara-font: "Noto Serif Tamil", Georgia, serif;
+  --lyric-font: "Noto Serif Tamil", Georgia, serif;
+  --swara-size: 14px;
+  --lyric-size: 11px;
+}
+
+.score-page.school-roman-teaching {
+  background: #ffffff;
+}
+.score-page.school-roman-teaching .cmnt-score {
+  --page-bg: #ffffff;
+  --swara-color: #000000;
+  --lyric-color: #111111;
+  --marker-color: #b30000;
+  --heading-color: #000000;
+  --swara-font: "Segoe UI", Arial, Helvetica, sans-serif;
+  --lyric-font: "Segoe UI", Arial, Helvetica, sans-serif;
+  --swara-size: 20px;
+  --lyric-size: 15px;
+}
+.score-page.school-roman-teaching .cmnt-swara,
+.score-page.school-roman-teaching .cmnt-marker {
+  font-weight: 800;
+}
+
+.score-page.school-screen-night {
+  background: #0b1220;
+}
+.score-page.school-screen-night .cmnt-score {
+  --page-bg: #0b1220;
+  --swara-color: #e5e9f0;
+  --lyric-color: #7dd3fc;
+  --marker-color: #facc15;
+  --heading-color: #f8fafc;
+  --swara-font: Georgia, "Times New Roman", serif;
+  --lyric-font: Georgia, "Times New Roman", serif;
+}
+
 /* Tamil glyphs render best in a script-aware font; applies on top of whichever
-   theme is active (kept after the theme rules so it always wins on ties). */
+   school is active (kept after the school rules so it always wins on ties). */
 .score-page.lang-tamil .cmnt-score {
   --swara-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;
   --lyric-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;

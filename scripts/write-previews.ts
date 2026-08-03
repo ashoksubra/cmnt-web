@@ -27,7 +27,7 @@ const stylesPath = resolve(root, "web/styles.css");
 const FONT_LINK =
   '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap">';
 
-const FIXTURES = ["smoke_adi", "smoke_adi_tamil", "smoke_rupaka", "maha_ganapatim"];
+const FIXTURES = ["smoke_adi", "smoke_adi_tamil", "smoke_rupaka", "maha_ganapatim", "sankachakra"];
 
 function usesTamilScript(items: LayoutItem[]): boolean {
   for (const item of items) {
@@ -45,7 +45,9 @@ function renderPreview(name: string, css: string): string {
   const song = parse(text);
   const items = layoutSong(song);
   const svg = renderScoreSvg(items, { contentWidth: 1100 });
-  const pageClass = usesTamilScript(items) ? "score-page theme-classic-blue lang-tamil" : "score-page theme-classic-blue";
+  const pageClass = usesTamilScript(items)
+    ? "score-page school-classic-print lang-tamil"
+    : "score-page school-classic-print";
 
   return `<!doctype html>
 <html>
