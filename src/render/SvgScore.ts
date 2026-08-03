@@ -11,6 +11,8 @@
 import type { Cell, LayoutItem, VisualRow } from "../core/Layout.js";
 import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
 import type { Heading } from "../model/Heading.js";
+import type { Script } from "../core/Translit.js";
+import { scriptFor, transliterateHeading, transliterateSwara, transliterateText } from "../core/Translit.js";
 
 export type SvgScoreOptions = {
   /** Usable content width (excluding side margins), in px. */
@@ -19,7 +21,20 @@ export type SvgScoreOptions = {
   marginX?: number;
   /** Top page margin, in px. */
   marginTop?: number;
+  /**
+   * Override the auto-detected script (from each row/heading's `Language:`)
+   * for every row/heading in the score -- e.g. for a live preview UI that
+   * lets the user force Tamil/English regardless of the source's directives.
+   */
+  forceScript?: Script;
 };
+
+/** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
+function languageScript(language: string | null | undefined, forceScript: Script | undefined): Script {
+  if (forceScript !== undefined) return forceScript;
+  const base = language?.split(":")[0];
+  return scriptFor(base);
+}
 
 const DEFAULT_CONTENT_WIDTH = 1100;
 const DEFAULT_MARGIN_X = 48;
@@ -51,7 +66,7 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
 
   for (const item of items) {
     if (item instanceof VisualHeading) {
-      const res = renderHeading(item.heading, marginX, contentWidth, y);
+      const res = renderHeading(item.heading, marginX, contentWidth, y, options.forceScript);
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     } else if (item instanceof VisualBreak) {
@@ -70,7 +85,7 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
       );
       y += 22;
     } else {
-      const res = renderRow(item, marginX, usableWidth, y);
+      const res = renderRow(item, marginX, usableWidth, y, options.forceScript);
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     }
@@ -96,13 +111,16 @@ function renderHeading(
   marginX: number,
   contentWidth: number,
   y: number,
+  forceScript: Script | undefined,
 ): { svg: string; nextY: number } {
   const sizeNum = parseFloat(h.fontSize) || 13;
   const size = sizeNum + 2;
-  const rawText = stripWiky(h.text).trim();
+  let rawText = stripWiky(h.text).trim();
   if (rawText === "") {
     return { svg: "", nextY: y + size * 0.9 + 4 };
   }
+  const script = languageScript(h.language, forceScript);
+  if (script != null) rawText = transliterateHeading(rawText, script);
 
   const styles: string[] = [`font-size:${fmt(size)}px`];
   if (h.bold) styles.push("font-weight:bold");
@@ -181,7 +199,9 @@ function renderRow(
   marginX: number,
   usableWidth: number,
   y: number,
+  forceScript: Script | undefined,
 ): { svg: string; nextY: number } {
+  const script = languageScript(row.language, forceScript);
   const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
   const lyricSize = parseFloat(row.lyricFontSize ?? "") || DEFAULT_LYRIC_SIZE;
   const gamakaSize = parseFloat(row.gamakaFontSize ?? "") || DEFAULT_GAMAKA_SIZE;
@@ -255,8 +275,9 @@ function renderRow(
         `<text class="cmnt-gati" x="${fmt(cx)}" y="${fmt(baselineY - swaraSize - octaveGap - gamakaGap)}" text-anchor="middle">${escapeXml(c.text)}</text>`,
       );
     } else if (c.kind === "swara" && c.text !== "") {
+      const swaraDisplay = transliterateSwara(c.text, script);
       parts.push(
-        `<text class="cmnt-swara"${swaraStyle} x="${fmt(cx)}" y="${fmt(baselineY)}" text-anchor="middle">${escapeXml(c.text)}</text>`,
+        `<text class="cmnt-swara"${swaraStyle} x="${fmt(cx)}" y="${fmt(baselineY)}" text-anchor="middle">${escapeXml(swaraDisplay)}</text>`,
       );
 
       if (c.octave !== 0) {
@@ -283,9 +304,11 @@ function renderRow(
       for (let li = 0; li < maxLyricLines; li++) {
         const lyric = li < c.lyrics.length ? c.lyrics[li]! : "";
         if (BLANK_LYRICS.has(lyric)) continue;
+        const wordStart = li < c.lyricWordStart.length ? c.lyricWordStart[li]! : true;
+        const lyricDisplay = transliterateText(lyric, script, wordStart);
         const lineY = baselineY + swaraToLyric + li * lyricLineHeight;
         parts.push(
-          `<text class="cmnt-lyric"${lyricStyle} x="${fmt(cx)}" y="${fmt(lineY)}" text-anchor="middle">${escapeXml(lyric)}</text>`,
+          `<text class="cmnt-lyric"${lyricStyle} x="${fmt(cx)}" y="${fmt(lineY)}" text-anchor="middle">${escapeXml(lyricDisplay)}</text>`,
         );
       }
     }

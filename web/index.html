@@ -3,27 +3,77 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CMNT Web</title>
+    <title>CMNT Web — Composer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="app-header">
-      <h1>CMNT Web</h1>
-      <div class="app-controls">
-        <label for="fixture-select">Fixture</label>
-        <select id="fixture-select">
-          <option value="smoke_adi">smoke_adi</option>
-          <option value="smoke_rupaka">smoke_rupaka</option>
-          <option value="maha_ganapatim">maha_ganapatim</option>
-        </select>
-        <button id="render-btn" type="button">Render</button>
-      </div>
+      <h1>CMNT Web <span class="app-header-sub">Composer preview</span></h1>
+      <div class="app-header-note">Path A &mdash; SVG score with live Indic transliteration</div>
     </header>
 
-    <p class="app-note">Iteration 2 preview &mdash; Roman swaras; Indic translit later.</p>
+    <main class="composer">
+      <section class="editor-pane">
+        <div class="toolbar">
+          <label class="field">
+            <span>Fixture</span>
+            <select id="fixture-select">
+              <option value="smoke_adi">smoke_adi</option>
+              <option value="smoke_adi_tamil">smoke_adi_tamil</option>
+              <option value="smoke_rupaka">smoke_rupaka</option>
+              <option value="maha_ganapatim">maha_ganapatim</option>
+            </select>
+          </label>
 
-    <main class="score-area">
-      <div id="score-page" class="score-page"></div>
+          <label class="field">
+            <span>Language</span>
+            <select id="lang-select">
+              <option value="auto">Auto (from source)</option>
+              <option value="english">English</option>
+              <option value="tamil">Tamil</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Theme</span>
+            <select id="theme-select">
+              <option value="classic-blue">Classic Blue</option>
+              <option value="high-contrast">High Contrast</option>
+              <option value="night-score">Night Score</option>
+            </select>
+          </label>
+
+          <label class="field field-checkbox">
+            <input type="checkbox" id="live-update-toggle" checked />
+            <span>Live update</span>
+          </label>
+
+          <button id="render-btn" type="button" class="primary-btn">Update</button>
+        </div>
+
+        <textarea
+          id="source-input"
+          class="source-input"
+          spellcheck="false"
+          autocapitalize="off"
+          autocomplete="off"
+          wrap="off"
+        ></textarea>
+
+        <div id="status-line" class="status status-ok">Ready</div>
+      </section>
+
+      <section class="preview-pane">
+        <div class="preview-scroll">
+          <div id="score-page" class="score-page theme-classic-blue"></div>
+        </div>
+      </section>
     </main>
 
     <script type="module" src="./main.ts"></script>

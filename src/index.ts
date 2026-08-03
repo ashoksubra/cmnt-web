@@ -25,3 +25,10 @@ export type { CellKind, LayoutItem } from "./core/Layout.js";
 export { dumpLayoutItems } from "./core/dumpLayout.js";
 export { renderScoreSvg } from "./render/SvgScore.js";
 export type { SvgScoreOptions } from "./render/SvgScore.js";
+export {
+  scriptFor,
+  transliterateSwara,
+  transliterateText,
+  transliterateHeading,
+} from "./core/Translit.js";
+export type { Script } from "./core/Translit.js";
