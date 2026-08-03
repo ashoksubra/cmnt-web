@@ -1,0 +1,4 @@
+HEAD: Talam : Adi (L+D+D)
+HEAD: smoke test
+BLOCK: 1)
+row00: s(d=1/4) r(d=1/4) g(d=1/4) m(d=1/4) p(d=1/4) d(d=1/4) n(d=1/4) s@1(d=1/4)

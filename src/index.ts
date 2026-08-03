@@ -9,3 +9,17 @@ export type { GatiValue } from "./model/Gati.js";
 export { Song } from "./model/Song.js";
 export { parse, ParseException } from "./core/CmntParser.js";
 export * as Talas from "./core/Talas.js";
+export {
+  Cell,
+  VisualRow,
+  VisualHeading,
+  VisualBreak,
+  VisualPageBreak,
+  gatiAt,
+  layoutBlock,
+  layoutSong,
+  firstCrossingMarker,
+  shortenSwaraDisplay,
+} from "./core/Layout.js";
+export type { CellKind, LayoutItem } from "./core/Layout.js";
+export { dumpLayoutItems } from "./core/dumpLayout.js";

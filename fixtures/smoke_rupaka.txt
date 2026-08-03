@@ -1,0 +1,7 @@
+Tala: Rupaka
+DefaultSpeed: 0
+CyclesPerRow: 2
+PhraseEnds: hide
+Heading: "rupaka smoke (anga split)",bold,center
+S: s rI rI r r g m rI g
+L: sa ri ri ra ra ga ma ri ga

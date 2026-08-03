@@ -1,0 +1,3 @@
+HEAD: Talam : Rupaka (A+D)
+HEAD: rupaka smoke (anga split)
+row00: s(d=1/4) rI(d=1/2) r(d=1/4) _ [|] _ ,(d=1/4) r(d=1/4) r(d=1/4) g(d=1/4) m(d=1/4) rI(d=1/2) g(d=1/4) _ [||] _
