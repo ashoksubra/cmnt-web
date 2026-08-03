@@ -1,0 +1,21 @@
+{
+  "name": "cmnt-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CMNT Web — SVG Carnatic notation (Path A)",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
