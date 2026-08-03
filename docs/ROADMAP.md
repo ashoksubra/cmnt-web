@@ -7,9 +7,11 @@ See also the Cursor canvas timeline in the parent CMNT project conversation.
 - [x] Clean repo under `Desktop/Development/cmnt-web`
 - [x] TypeScript + Vitest toolchain
 - [x] Port `Fraction`
-- [ ] Port model (`Swara`, `Tala`, `Song`, …)
-- [ ] Port `CmntParser` + `Layout`
-- [ ] Golden dumps vs JAR for Sankachakra + samples
+- [x] Port model (`Swara`, `Tala`, `Song`, `SongBlock`, …)
+- [x] Port `Talas` + `CmntParser` (classic directives)
+- [x] Parse fixtures: `smoke_adi`, `maha_ganapatim`
+- [ ] Port `Layout` + golden layout dumps vs JAR
+- [ ] Port `Ragas` tables + YAML front-matter translation
 
 ## Iteration 2+
 

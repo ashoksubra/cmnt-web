@@ -1,0 +1,6 @@
+Tala: Adi
+DefaultSpeed: 0
+PhraseEnds: hide
+Heading: "smoke test",bold,center
+S: "1)" s r g m | p d n s' ||
+L:      sa ri ga ma  pa da ni sa
