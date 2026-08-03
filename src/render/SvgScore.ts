@@ -13,6 +13,12 @@ import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
 import type { Heading } from "../model/Heading.js";
 import type { Script } from "../core/Translit.js";
 import { scriptFor, transliterate, transliterateHeading, transliterateSwara } from "../core/Translit.js";
+import {
+  formatRagamTalamDisplay,
+  looksLikeRagamTalamHeading,
+  parseRagamTalamHeading,
+  type RagamTalamDisplayOverrides,
+} from "../core/RagamTalamDisplay.js";
 import { Fraction } from "../model/Fraction.js";
 
 export type SvgScoreOptions = {
@@ -39,6 +45,12 @@ export type SvgScoreOptions = {
    * lyric baseline) for the same density-preset purpose. Default 1.
    */
   rowSpacingScale?: number;
+  /**
+   * On-screen overrides for the combined Raagam/Taalam heading names.
+   * When set, those name portions are used as-is (not re-transliterated) so
+   * the user can correct imperfect automatic transliterations.
+   */
+  ragamTalamOverrides?: RagamTalamDisplayOverrides;
 };
 
 /** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
@@ -82,7 +94,14 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
 
   for (const item of items) {
     if (item instanceof VisualHeading) {
-      const res = renderHeading(item.heading, marginX, contentWidth, y, options.forceScript);
+      const res = renderHeading(
+        item.heading,
+        marginX,
+        contentWidth,
+        y,
+        options.forceScript,
+        options.ragamTalamOverrides,
+      );
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     } else if (item instanceof VisualBreak) {
@@ -129,6 +148,7 @@ function renderHeading(
   contentWidth: number,
   y: number,
   forceScript: Script | undefined,
+  ragamTalamOverrides?: RagamTalamDisplayOverrides,
 ): { svg: string; nextY: number } {
   const sizeNum = parseFloat(h.fontSize) || 13;
   const size = sizeNum + 2;
@@ -137,7 +157,20 @@ function renderHeading(
     return { svg: "", nextY: y + size * 0.9 + 4 };
   }
   const script = languageScript(h.language, forceScript);
-  if (script != null) rawText = transliterateHeading(rawText, script);
+  const isRagamTalam =
+    h.role === "ragamTalam" || (h.role == null && looksLikeRagamTalamHeading(rawText));
+  if (isRagamTalam) {
+    const parts = parseRagamTalamHeading(rawText);
+    if (parts != null) {
+      // Always run through the localized formatter (even for English) so label
+      // wording stays consistent and name overrides apply.
+      rawText = formatRagamTalamDisplay(parts, script, ragamTalamOverrides ?? {});
+    } else if (script != null) {
+      rawText = transliterateHeading(rawText, script);
+    }
+  } else if (script != null) {
+    rawText = transliterateHeading(rawText, script);
+  }
 
   const styles: string[] = [`font-size:${fmt(size)}px`];
   if (h.bold) styles.push("font-weight:bold");

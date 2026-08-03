@@ -71,5 +71,8 @@ describe("YamlFrontMatter.preprocess", () => {
     expect(song.defaultSpeed).toBe(0);
     expect(song.title).toContain("Sangkha cakra gadA pANim");
     expect(song.blockCount()).toBeGreaterThan(5);
+    const rt = song.parts.find((p): p is Heading => p instanceof Heading && p.role === "ragamTalam");
+    expect(rt?.language?.split(":")[0]).toBe("tamil");
   });
 });
+

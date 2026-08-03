@@ -56,6 +56,20 @@
           <button id="export-png-btn" type="button" class="secondary-btn">Export PNG</button>
         </div>
 
+        <div class="header-overrides" title="Raagam/Taalam follow the score language. Edit if automatic transliteration is imperfect.">
+          <label class="field field-grow">
+            <span>Raagam (on score)</span>
+            <input id="ragam-display" type="text" spellcheck="false" autocomplete="off" />
+          </label>
+          <label class="field field-grow">
+            <span>Taalam (on score)</span>
+            <input id="talam-display" type="text" spellcheck="false" autocomplete="off" />
+          </label>
+          <button id="reset-headers-btn" type="button" class="secondary-btn" title="Restore auto-transliterated names">
+            Reset names
+          </button>
+        </div>
+
         <textarea
           id="source-input"
           class="source-input"

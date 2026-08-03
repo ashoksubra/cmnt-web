@@ -193,10 +193,14 @@ class Parser {
       h.bold = true;
       h.alignment = "center";
       h.fontSize = this.headingPrefs.fontSize;
+      h.language = this.curLang;
+      h.role = "ragamTalam";
       this.ragamTalamHeading = h;
       song.add(h);
     } else {
       this.ragamTalamHeading.text = text;
+      this.ragamTalamHeading.language = this.curLang;
+      this.ragamTalamHeading.role = "ragamTalam";
     }
   }
 
@@ -514,6 +518,12 @@ class Parser {
         }
         this.curLang = s;
         song.language = base;
+        // Raagam:/Tala: often appear before Language: (YAML emits them that way
+        // historically; classic files do too). Retag the combined heading so it
+        // follows the score language instead of staying stuck on english.
+        if (this.ragamTalamHeading !== null) {
+          this.ragamTalamHeading.language = s;
+        }
         continue;
       }
 

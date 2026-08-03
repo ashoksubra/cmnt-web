@@ -359,6 +359,11 @@ function translate(raw: YamlMap): string[] {
   if (rs !== null) out.push(`RowSpacing: ${rs}`);
   if (cellSp !== null) out.push(`CellSpacing: ${cellSp}`);
 
+  // Emit Language before Raagam/Tala so the combined ragam/talam heading is
+  // tagged with the score language at creation time (not stuck on english
+  // until a later Language: retag).
+  if (language !== null) out.push(`Language: ${language}`);
+
   const raga = firstNonNull(str(m.raga), str(m.ragam), str(m.raagam));
   const melakarta = str(m.melakarta);
   if (melakarta !== null) out.push(`Melakarta: ${melakarta}`);
@@ -368,7 +373,6 @@ function translate(raw: YamlMap): string[] {
   if (tala !== null) out.push(`Tala: ${tala}`);
   const speed = firstNonNull(str(m.speed), str(m.defaultspeed));
   if (speed !== null) out.push(`DefaultSpeed: ${speed}`);
-  if (language !== null) out.push(`Language: ${language}`);
   const speedMarks = str(m.speedmarks);
   if (speedMarks !== null) out.push(`SpeedMarks: ${speedMarks}`);
   const phraseEnds = str(m.phraseends);

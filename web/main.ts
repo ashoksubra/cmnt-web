@@ -4,6 +4,11 @@ import type { LayoutItem } from "@cmnt/core/Layout";
 import { renderScoreSvg } from "@cmnt/render/SvgScore";
 import { scriptFor } from "@cmnt/core/Translit";
 import type { Script } from "@cmnt/core/Translit";
+import {
+  autoRagamDisplayName,
+  autoTalamDisplayName,
+  parseRagamTalamHeading,
+} from "@cmnt/core/RagamTalamDisplay";
 import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
 import type { SchoolId, SchoolPreset } from "@cmnt/theme/schools";
 import stylesCssRaw from "./styles.css?raw";
@@ -34,11 +39,17 @@ const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
 const exportSvgBtn = document.querySelector<HTMLButtonElement>("#export-svg-btn")!;
 const exportPngBtn = document.querySelector<HTMLButtonElement>("#export-png-btn")!;
+const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!;
+const talamDisplay = document.querySelector<HTMLInputElement>("#talam-display")!;
+const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
 
 let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
+/** Once the user edits a name field, keep their text until Reset / fixture change. */
+let ragamNameDirty = false;
+let talamNameDirty = false;
 
 function forceScriptFor(lang: LangOverride): Script | undefined {
   if (lang === "auto") return undefined;
@@ -106,6 +117,39 @@ function usesTamilScript(items: LayoutItem[], forceScript: Script | undefined): 
   return false;
 }
 
+function findRagamTalamHeading(items: LayoutItem[]) {
+  for (const item of items) {
+    if (!(item instanceof VisualHeading)) continue;
+    const h = item.heading;
+    if (h.role === "ragamTalam" || parseRagamTalamHeading(h.text) != null) {
+      return h;
+    }
+  }
+  return null;
+}
+
+function syncHeaderFields(items: LayoutItem[], forceScript: Script | undefined): void {
+  const h = findRagamTalamHeading(items);
+  const parts = h != null ? parseRagamTalamHeading(h.text) : null;
+  if (parts == null) {
+    if (!ragamNameDirty) ragamDisplay.value = "";
+    if (!talamNameDirty) talamDisplay.value = "";
+    ragamDisplay.disabled = true;
+    talamDisplay.disabled = true;
+    return;
+  }
+  ragamDisplay.disabled = parts.ragaName == null;
+  talamDisplay.disabled = parts.talaName == null;
+  const script = forceScript !== undefined ? forceScript : scriptFor(h!.language?.split(":")[0] ?? null);
+  if (!ragamNameDirty) ragamDisplay.value = autoRagamDisplayName(parts, script);
+  if (!talamNameDirty) talamDisplay.value = autoTalamDisplayName(parts, script);
+}
+
+function clearHeaderOverrides(): void {
+  ragamNameDirty = false;
+  talamNameDirty = false;
+}
+
 function render(): void {
   const text = sourceInput.value;
   const forceScript = forceScriptFor(langSelect.value as LangOverride);
@@ -113,11 +157,16 @@ function render(): void {
   try {
     const song = parse(text);
     const items = layoutSong(song);
+    syncHeaderFields(items, forceScript);
     const svg = renderScoreSvg(items, {
       contentWidth: 1100,
       forceScript,
       unitWidthScale: currentSchool.density.unitWidthScale,
       rowSpacingScale: currentSchool.density.rowSpacingScale,
+      ragamTalamOverrides: {
+        ragaName: ragamNameDirty ? ragamDisplay.value : undefined,
+        talaName: talamNameDirty ? talamDisplay.value : undefined,
+      },
     });
     scorePage.innerHTML = svg;
     scorePage.classList.toggle("lang-tamil", usesTamilScript(items, forceScript));
@@ -150,6 +199,7 @@ function scheduleRender(): void {
 function loadFixture(key: string): void {
   const text = FIXTURES[key];
   if (text == null) return;
+  clearHeaderOverrides();
   sourceInput.value = text;
   render();
 }
@@ -251,11 +301,29 @@ function exportPng(): void {
 }
 
 fixtureSelect.addEventListener("change", () => loadFixture(fixtureSelect.value));
-langSelect.addEventListener("change", render);
-schoolSelect.addEventListener("change", () => applySchool(schoolSelect.value as SchoolId));
+langSelect.addEventListener("change", () => {
+  clearHeaderOverrides();
+  render();
+});
+schoolSelect.addEventListener("change", () => {
+  clearHeaderOverrides();
+  applySchool(schoolSelect.value as SchoolId);
+});
 renderBtn.addEventListener("click", render);
 exportSvgBtn.addEventListener("click", exportSvg);
 exportPngBtn.addEventListener("click", exportPng);
+ragamDisplay.addEventListener("input", () => {
+  ragamNameDirty = true;
+  scheduleRender();
+});
+talamDisplay.addEventListener("input", () => {
+  talamNameDirty = true;
+  scheduleRender();
+});
+resetHeadersBtn.addEventListener("click", () => {
+  clearHeaderOverrides();
+  render();
+});
 sourceInput.addEventListener("input", scheduleRender);
 sourceInput.addEventListener("keydown", (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {

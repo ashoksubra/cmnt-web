@@ -10,6 +10,12 @@ export class Heading implements SongPart {
   italic = false;
   language: string | null = null;
   tightAbove = false;
+  /**
+   * Special heading roles. `"ragamTalam"` is the combined
+   * "Ragam : … | Talam : …" line built by the parser -- renderers localize
+   * labels/names into the score language and accept on-screen name overrides.
+   */
+  role: "ragamTalam" | null = null;
 
   constructor(text: string) {
     this.text = text;

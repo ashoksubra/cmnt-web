@@ -33,5 +33,13 @@ export {
   transliterateHeading,
 } from "./core/Translit.js";
 export type { Script } from "./core/Translit.js";
+export {
+  parseRagamTalamHeading,
+  formatRagamTalamDisplay,
+  autoRagamDisplayName,
+  autoTalamDisplayName,
+  looksLikeRagamTalamHeading,
+} from "./core/RagamTalamDisplay.js";
+export type { RagamTalamParts, RagamTalamDisplayOverrides } from "./core/RagamTalamDisplay.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
 export type { SchoolId, SchoolPreset } from "./theme/schools.js";
