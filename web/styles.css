@@ -1,0 +1,199 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #eef1f6;
+  color: #1f2933;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #dbe1ea;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #14213d;
+}
+
+.app-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-controls label {
+  font-size: 13px;
+  color: #52606d;
+}
+
+.app-controls select,
+.app-controls button {
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd2d9;
+  background: #ffffff;
+  color: #1f2933;
+}
+
+.app-controls button {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.app-controls button:hover {
+  background: #1e40af;
+}
+
+.app-note {
+  margin: 10px 24px 0;
+  font-size: 13px;
+  font-style: italic;
+  color: #7b8794;
+}
+
+.score-area {
+  padding: 24px;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.score-page {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(20, 33, 61, 0.12), 0 8px 24px rgba(20, 33, 61, 0.08);
+  border-radius: 4px;
+  padding: 12px;
+  max-width: 100%;
+}
+
+.score-page svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.app-error {
+  color: #b91c1c;
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+
+/* ---- .cmnt-score: Path A theming foundation ("classic blue" default) ---- */
+.cmnt-score {
+  --page-bg: #ffffff;
+  --swara-color: #14213d;
+  --lyric-color: #3a5a8c;
+  --marker-color: #1d4ed8;
+  --heading-color: #0f172a;
+  --swara-font: Georgia, "Times New Roman", serif;
+  --lyric-font: Georgia, "Times New Roman", serif;
+  --swara-size: 16px;
+  --lyric-size: 13px;
+}
+
+.cmnt-page-bg {
+  fill: var(--page-bg);
+}
+
+.cmnt-heading {
+  fill: var(--heading-color);
+  font-family: var(--swara-font);
+}
+
+.cmnt-block-heading {
+  fill: var(--marker-color);
+  font-family: var(--swara-font);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cmnt-swara {
+  fill: var(--swara-color);
+  font-family: var(--swara-font);
+  font-size: var(--swara-size);
+  font-weight: 600;
+}
+
+.cmnt-lyric {
+  fill: var(--lyric-color);
+  font-family: var(--lyric-font);
+  font-size: var(--lyric-size);
+}
+
+.cmnt-marker {
+  fill: var(--marker-color);
+  font-family: var(--swara-font);
+  font-size: var(--swara-size);
+  font-weight: 700;
+}
+
+.cmnt-gati {
+  fill: var(--marker-color);
+  font-family: var(--swara-font);
+  font-size: 10px;
+  font-style: italic;
+}
+
+.cmnt-gamaka {
+  fill: var(--marker-color);
+  font-family: var(--swara-font);
+  font-size: 10px;
+  font-style: italic;
+}
+
+.cmnt-octave {
+  fill: var(--swara-color);
+}
+
+.cmnt-phrase-tick {
+  stroke: var(--swara-color);
+  stroke-width: 2;
+}
+
+.cmnt-speed-beam {
+  stroke: var(--marker-color);
+  stroke-width: 1.4;
+}
+
+.cmnt-cluster-bracket {
+  stroke: var(--marker-color);
+  stroke-width: 1.3;
+  fill: none;
+}
+
+.cmnt-break {
+  stroke: #cbd2d9;
+  stroke-width: 1;
+  stroke-dasharray: 4, 4;
+}
+
+.cmnt-pagebreak-rule {
+  stroke: var(--marker-color);
+  stroke-width: 1;
+}
+
+.cmnt-pagebreak-label {
+  fill: var(--marker-color);
+  font-family: var(--swara-font);
+  font-size: 10px;
+  font-weight: 700;
+}

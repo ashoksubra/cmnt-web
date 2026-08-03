@@ -5,6 +5,9 @@
   "type": "module",
   "description": "CMNT Web — SVG Carnatic notation (Path A)",
   "scripts": {
+    "dev": "vite",
+    "build:web": "vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -16,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^7.0.2",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10"
   }
 }

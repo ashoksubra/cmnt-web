@@ -23,3 +23,5 @@ export {
 } from "./core/Layout.js";
 export type { CellKind, LayoutItem } from "./core/Layout.js";
 export { dumpLayoutItems } from "./core/dumpLayout.js";
+export { renderScoreSvg } from "./render/SvgScore.js";
+export type { SvgScoreOptions } from "./render/SvgScore.js";
