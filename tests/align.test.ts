@@ -77,7 +77,65 @@ describe("alignSection", () => {
     // Trailing gap span keeps its tiny natural width instead of claiming leftover budget.
     expect(widths[3]!).toBeLessThan(20);
   });
+
+  it("left-packs 2-note and 4-note angas so first notes and markers share x", () => {
+    const gap = (): Cell => {
+      const c = new Cell();
+      c.kind = "gap";
+      c.width = 0.35;
+      return c;
+    };
+    // Same first-anga duration (2 aksharas): pA + ;  vs  r g m r (four ½-akshara)
+    const half = new Fraction(1, 2);
+    const row2 = row([
+      swara("pA", Fraction.ONE),
+      swara(";", Fraction.ONE),
+      gap(),
+      marker("|"),
+      swara("p", Fraction.ONE),
+      gap(),
+      marker("||"),
+    ]);
+    const row4 = row([
+      swara("r", half),
+      swara("g", half),
+      swara("m", half),
+      swara("r", half),
+      gap(),
+      marker("|"),
+      swara("r", Fraction.ONE),
+      gap(),
+      marker("||"),
+    ]);
+    row2.blockHeading = "1.";
+    // unnumbered continuation — must still share the content left edge
+    row4.blockHeading = null;
+
+    const target = 800;
+    const aligned = alignSection([row2, row4], target);
+    const a = aligned.get(row2)!;
+    const b = aligned.get(row4)!;
+
+    const markerX = (w: number[], cells: Cell[]): number => {
+      let x = 0;
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i]!.kind === "marker") return x;
+        x += w[i]!;
+      }
+      return x;
+    };
+    expect(markerX(a, row2.cells)).toBeCloseTo(markerX(b, row4.cells), 0);
+
+    // First swara cells stay compact (not half the anga); slack sits in the gap.
+    expect(a[0]!).toBeLessThan(80);
+    expect(b[0]!).toBeLessThan(80);
+    expect(a[0]!).toBeCloseTo(b[0]!, -1); // same order of magnitude / left pack
+    // Gap before first `|` absorbs most of the anga slack.
+    expect(a[2]!).toBeGreaterThan(a[0]!);
+    expect(b[4]!).toBeGreaterThan(b[0]!);
+  });
 });
+
 
 describe("section-aligned rendering doesn't throw on real fixtures", () => {
   it("renders maha_ganapatim with section alignment enabled by default", () => {
