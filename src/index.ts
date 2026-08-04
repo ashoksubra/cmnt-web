@@ -64,8 +64,11 @@ export {
   stopPlayback,
   parseDynMark,
   extractRagaMapping,
+  INSTRUMENTS,
+  instrumentById,
+  clampPlaybackSpeed,
 } from "./core/Playback.js";
-export type { PlannedNote, DynMark, PlaybackHandle } from "./core/Playback.js";
+export type { PlannedNote, DynMark, PlaybackHandle, Instrument, InstrumentId, PlaySongOptions } from "./core/Playback.js";
 export { defaultMeasureCellWidth } from "./render/SvgScore.js";
 export type { CellWidthMeasurer } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";

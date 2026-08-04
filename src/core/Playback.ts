@@ -171,6 +171,102 @@ function midiToHz(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
+/** Web-Audio instrument voices (JAR-style picker; synthesized, not SoundFonts). */
+export type InstrumentId = "shehnai" | "flute" | "violin" | "sitar" | "piano";
+
+export type Instrument = {
+  id: InstrumentId;
+  label: string;
+  /** Partials: [harmonicMultiple, relativeGain] */
+  partials: readonly [number, number][];
+  attack: number;
+  release: number;
+};
+
+export const INSTRUMENTS: readonly Instrument[] = [
+  {
+    id: "shehnai",
+    label: "Shehnai",
+    partials: [
+      [1, 1],
+      [2, 0.45],
+      [3, 0.22],
+      [4, 0.1],
+    ],
+    attack: 0.03,
+    release: 0.06,
+  },
+  {
+    id: "flute",
+    label: "Flute",
+    partials: [
+      [1, 1],
+      [2, 0.12],
+      [3, 0.05],
+    ],
+    attack: 0.04,
+    release: 0.08,
+  },
+  {
+    id: "violin",
+    label: "Violin",
+    partials: [
+      [1, 1],
+      [2, 0.55],
+      [3, 0.3],
+      [4, 0.15],
+      [5, 0.08],
+    ],
+    attack: 0.05,
+    release: 0.1,
+  },
+  {
+    id: "sitar",
+    label: "Sitar",
+    partials: [
+      [1, 1],
+      [2, 0.35],
+      [3, 0.4],
+      [5, 0.2],
+      [7, 0.12],
+    ],
+    attack: 0.01,
+    release: 0.18,
+  },
+  {
+    id: "piano",
+    label: "Piano",
+    partials: [
+      [1, 1],
+      [2, 0.5],
+      [3, 0.25],
+      [4, 0.12],
+    ],
+    attack: 0.005,
+    release: 0.22,
+  },
+];
+
+export function instrumentById(id: string | null | undefined): Instrument {
+  return INSTRUMENTS.find((i) => i.id === id) ?? INSTRUMENTS[0]!;
+}
+
+export type PlaySongOptions = {
+  /**
+   * Playback speed multiplier. 1 = default tempo, 2 = twice as fast,
+   * 0.5 = half speed. Clamped to a sensible UI range.
+   */
+  speed?: number;
+  /** Instrument voice (default Shehnai). */
+  instrument?: InstrumentId | string;
+};
+
+/** Clamp UI speed slider values into a safe playback range. */
+export function clampPlaybackSpeed(speed: number): number {
+  if (!Number.isFinite(speed)) return 1;
+  return Math.min(2.5, Math.max(0.4, speed));
+}
+
 export type PlaybackHandle = {
   stop: () => void;
   readonly playing: boolean;
@@ -184,11 +280,72 @@ export function stopPlayback(): void {
   activeHandle = null;
 }
 
+type Stoppable = { stop: (when?: number) => void };
+
+function scheduleNoteVoice(
+  ctx: AudioContext,
+  master: AudioNode,
+  instrument: Instrument,
+  n: PlannedNote,
+  startAt: number,
+  stoppables: Stoppable[],
+): void {
+  const dur = Math.max(0.04, n.endSec - n.startSec);
+  const baseHz = midiToHz(n.midi);
+  const t0 = startAt + n.startSec;
+  const t1 = startAt + n.endSec;
+  const peak = (LEVEL_GAIN[n.volumeLevel] ?? LEVEL_GAIN[2]) * 0.9;
+  const attack = Math.min(instrument.attack, dur * 0.35);
+  const release = Math.min(instrument.release, dur * 0.45);
+
+  const noteGain = ctx.createGain();
+  noteGain.gain.setValueAtTime(0.0001, t0);
+  noteGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + attack);
+  noteGain.gain.setValueAtTime(Math.max(0.0002, peak), Math.max(t0 + attack, t1 - release));
+  noteGain.gain.exponentialRampToValueAtTime(0.0001, t1);
+  noteGain.connect(master);
+
+  for (const [mult, rel] of instrument.partials) {
+    const osc = ctx.createOscillator();
+    osc.type = instrument.id === "flute" ? "sine" : instrument.id === "piano" ? "triangle" : "sawtooth";
+    const hz = baseHz * mult;
+    osc.frequency.setValueAtTime(hz, t0);
+
+    if (n.kampita && mult === 1) {
+      const depth = n.volumeLevel >= 3 ? 14 : 9;
+      const lfo = ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = n.volumeLevel >= 3 ? 5.5 : 4.5;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = depth;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      lfo.start(t0);
+      lfo.stop(t1 + 0.02);
+      stoppables.push(lfo);
+    } else if (n.slideUp && mult === 1) {
+      osc.frequency.setValueAtTime(hz * 0.94, t0);
+      osc.frequency.linearRampToValueAtTime(hz, t0 + Math.min(0.18, dur * 0.4));
+    } else if (n.slideDown && mult === 1) {
+      osc.frequency.setValueAtTime(hz * 1.06, t0);
+      osc.frequency.linearRampToValueAtTime(hz, t0 + Math.min(0.18, dur * 0.4));
+    }
+
+    const partialGain = ctx.createGain();
+    partialGain.gain.value = rel;
+    osc.connect(partialGain);
+    partialGain.connect(noteGain);
+    osc.start(t0);
+    osc.stop(t1 + 0.03);
+    stoppables.push(osc);
+  }
+}
+
 /**
  * Play a song via Web Audio. Returns a handle; calling stop() or starting
  * another play cancels the current one.
  */
-export async function playSong(song: Song, opts: { bpmScale?: number } = {}): Promise<PlaybackHandle> {
+export async function playSong(song: Song, opts: PlaySongOptions = {}): Promise<PlaybackHandle> {
   stopPlayback();
   const AudioCtx =
     typeof globalThis !== "undefined"
@@ -203,60 +360,23 @@ export async function playSong(song: Song, opts: { bpmScale?: number } = {}): Pr
   const ctx = new AudioCtx();
   if (ctx.state === "suspended") await ctx.resume();
 
-  const scale = opts.bpmScale ?? 1;
+  const speed = clampPlaybackSpeed(opts.speed ?? 1);
+  const instrument = instrumentById(opts.instrument);
   const notes = planNotes(song).map((n) => ({
     ...n,
-    startSec: n.startSec / scale,
-    endSec: n.endSec / scale,
+    startSec: n.startSec / speed,
+    endSec: n.endSec / speed,
   }));
 
   const master = ctx.createGain();
-  master.gain.value = 0.85;
+  master.gain.value = 0.8;
   master.connect(ctx.destination);
 
   const startAt = ctx.currentTime + 0.05;
-  const oscillators: OscillatorNode[] = [];
+  const stoppables: Stoppable[] = [];
 
   for (const n of notes) {
-    const dur = Math.max(0.04, n.endSec - n.startSec);
-    const osc = ctx.createOscillator();
-    osc.type = "triangle";
-    const baseHz = midiToHz(n.midi);
-    osc.frequency.setValueAtTime(baseHz, startAt + n.startSec);
-
-    if (n.kampita) {
-      const depth = n.volumeLevel >= 3 ? 18 : 12;
-      const lfo = ctx.createOscillator();
-      lfo.type = "sine";
-      lfo.frequency.value = n.volumeLevel >= 3 ? 5.5 : 4.5;
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = depth;
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc.frequency);
-      lfo.start(startAt + n.startSec);
-      lfo.stop(startAt + n.endSec + 0.02);
-    } else if (n.slideUp) {
-      osc.frequency.setValueAtTime(baseHz * 0.94, startAt + n.startSec);
-      osc.frequency.linearRampToValueAtTime(baseHz, startAt + n.startSec + Math.min(0.18, dur * 0.4));
-    } else if (n.slideDown) {
-      osc.frequency.setValueAtTime(baseHz * 1.06, startAt + n.startSec);
-      osc.frequency.linearRampToValueAtTime(baseHz, startAt + n.startSec + Math.min(0.18, dur * 0.4));
-    }
-
-    const g = ctx.createGain();
-    const peak = LEVEL_GAIN[n.volumeLevel] ?? LEVEL_GAIN[2];
-    const t0 = startAt + n.startSec;
-    const t1 = startAt + n.endSec;
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
-    g.gain.setValueAtTime(peak, Math.max(t0 + 0.02, t1 - 0.04));
-    g.gain.exponentialRampToValueAtTime(0.0001, t1);
-
-    osc.connect(g);
-    g.connect(master);
-    osc.start(t0);
-    osc.stop(t1 + 0.03);
-    oscillators.push(osc);
+    scheduleNoteVoice(ctx, master, instrument, n, startAt, stoppables);
   }
 
   let playing = true;
@@ -267,7 +387,7 @@ export async function playSong(song: Song, opts: { bpmScale?: number } = {}): Pr
     stop() {
       if (!playing) return;
       playing = false;
-      for (const o of oscillators) {
+      for (const o of stoppables) {
         try {
           o.stop();
         } catch {

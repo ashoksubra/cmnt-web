@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "@cmnt/core/CmntParser";
-import { planNotes, parseDynMark, extractRagaMapping } from "@cmnt/core/Playback";
+import {
+  planNotes,
+  parseDynMark,
+  extractRagaMapping,
+  clampPlaybackSpeed,
+  INSTRUMENTS,
+  instrumentById,
+} from "@cmnt/core/Playback";
 
 describe("parseDynMark", () => {
   it("pulls volume tags out of gamaka text", () => {
@@ -54,5 +61,19 @@ describe("extractRagaMapping", () => {
     const map = extractRagaMapping(song);
     expect(map.get("r")).toBe(2);
     expect(map.get("g")).toBe(4);
+  });
+});
+
+describe("instruments and speed", () => {
+  it("lists the JAR-style instrument set", () => {
+    expect(INSTRUMENTS.map((i) => i.id)).toEqual(["shehnai", "flute", "violin", "sitar", "piano"]);
+    expect(instrumentById("violin").label).toBe("Violin");
+    expect(instrumentById("unknown").id).toBe("shehnai");
+  });
+
+  it("clamps playback speed to a safe slider range", () => {
+    expect(clampPlaybackSpeed(1)).toBe(1);
+    expect(clampPlaybackSpeed(0.1)).toBe(0.4);
+    expect(clampPlaybackSpeed(9)).toBe(2.5);
   });
 });

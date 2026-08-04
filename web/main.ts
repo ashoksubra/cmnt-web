@@ -10,7 +10,14 @@ import {
   parseRagamTalamHeading,
 } from "@cmnt/core/RagamTalamDisplay";
 import { TALA_NAMES } from "@cmnt/core/Talas";
-import { playSong, stopPlayback, type PlaybackHandle } from "@cmnt/core/Playback";
+import {
+  INSTRUMENTS,
+  clampPlaybackSpeed,
+  playSong,
+  stopPlayback,
+  type InstrumentId,
+  type PlaybackHandle,
+} from "@cmnt/core/Playback";
 import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
 import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
 import { buildMenubar, type MenuItem } from "./menubar";
@@ -55,6 +62,11 @@ const langSelect = document.querySelector<HTMLSelectElement>("#lang-select")!;
 const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")!;
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
+const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrument-select")!;
+const speedSlider = document.querySelector<HTMLInputElement>("#speed-slider")!;
+const speedLabel = document.querySelector<HTMLElement>("#speed-label")!;
+const playBtn = document.querySelector<HTMLButtonElement>("#play-btn")!;
+const stopBtn = document.querySelector<HTMLButtonElement>("#stop-btn")!;
 const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!;
 const talamDisplay = document.querySelector<HTMLInputElement>("#talam-display")!;
 const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
@@ -67,6 +79,31 @@ let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 let ragamNameDirty = false;
 let talamNameDirty = false;
 let playbackHandle: PlaybackHandle | null = null;
+
+function currentPlaybackSpeed(): number {
+  return clampPlaybackSpeed(Number.parseFloat(speedSlider.value) || 1);
+}
+
+function currentInstrumentId(): InstrumentId {
+  return (instrumentSelect.value || "shehnai") as InstrumentId;
+}
+
+function updateSpeedLabel(): void {
+  const s = currentPlaybackSpeed();
+  const text = Number.isInteger(s) ? String(s) : s.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  speedLabel.textContent = `${text}×`;
+}
+
+function populateInstrumentSelect(): void {
+  instrumentSelect.innerHTML = "";
+  for (const inst of INSTRUMENTS) {
+    const opt = document.createElement("option");
+    opt.value = inst.id;
+    opt.textContent = inst.label;
+    instrumentSelect.appendChild(opt);
+  }
+  instrumentSelect.value = "shehnai";
+}
 
 /** Current song document name (download / title bar). */
 let currentFileName = "Untitled.txt";
@@ -571,8 +608,11 @@ function sampleMenuItems(): MenuItem[] {
 async function playFromStart(): Promise<void> {
   try {
     const song = parse(sourceInput.value);
-    playbackHandle = await playSong(song);
-    setStatusOk("Playing… (Play → Stop to cancel)");
+    const speed = currentPlaybackSpeed();
+    const instrument = currentInstrumentId();
+    playbackHandle = await playSong(song, { speed, instrument });
+    const instLabel = INSTRUMENTS.find((i) => i.id === instrument)?.label ?? instrument;
+    setStatusOk(`Playing ${instLabel} at ${speed.toFixed(2)}× — Stop to cancel`);
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
@@ -648,6 +688,16 @@ function buildAppMenus(): void {
       items: [
         { label: "Play from Start", shortcut: `${mod}P`, action: () => void playFromStart() },
         { label: "Stop", shortcut: `${mod}.`, action: () => stopPlay() },
+        { separator: true },
+        ...INSTRUMENTS.map(
+          (inst): MenuItem => ({
+            label: `Instrument: ${inst.label}`,
+            action: () => {
+              instrumentSelect.value = inst.id;
+              setStatusOk(`Instrument → ${inst.label}`);
+            },
+          }),
+        ),
       ],
     },
     {
@@ -709,6 +759,15 @@ schoolSelect.addEventListener("change", () => {
   applySchool(schoolSelect.value as SchoolId);
 });
 renderBtn.addEventListener("click", render);
+playBtn.addEventListener("click", () => void playFromStart());
+stopBtn.addEventListener("click", stopPlay);
+speedSlider.addEventListener("input", () => {
+  updateSpeedLabel();
+});
+instrumentSelect.addEventListener("change", () => {
+  const inst = INSTRUMENTS.find((i) => i.id === instrumentSelect.value);
+  setStatusOk(`Instrument → ${inst?.label ?? instrumentSelect.value}`);
+});
 ragamDisplay.addEventListener("input", () => {
   ragamNameDirty = true;
   scheduleRender();
@@ -765,6 +824,8 @@ window.addEventListener("beforeunload", (ev) => {
 });
 
 populateSchoolSelect();
+populateInstrumentSelect();
+updateSpeedLabel();
 buildAppMenus();
 updateDocTitle();
 sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
