@@ -10,9 +10,11 @@ import {
   parseRagamTalamHeading,
 } from "@cmnt/core/RagamTalamDisplay";
 import { TALA_NAMES } from "@cmnt/core/Talas";
+import { playSong, stopPlayback, type PlaybackHandle } from "@cmnt/core/Playback";
 import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
 import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
 import { buildMenubar, type MenuItem } from "./menubar";
+import { createCanvasCellMeasurer } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
 import smokeAdi from "../fixtures/smoke_adi.txt?raw";
@@ -64,6 +66,7 @@ let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 /** Once the user edits a name field, keep their text until Reset / fixture change. */
 let ragamNameDirty = false;
 let talamNameDirty = false;
+let playbackHandle: PlaybackHandle | null = null;
 
 /** Current song document name (download / title bar). */
 let currentFileName = "Untitled.txt";
@@ -225,6 +228,7 @@ function render(): void {
         ragaName: ragamNameDirty ? ragamDisplay.value : undefined,
         talaName: talamNameDirty ? talamDisplay.value : undefined,
       },
+      measureCellWidth: createCanvasCellMeasurer({ forceScript }),
     });
     scorePage.innerHTML = svg;
     applyLangFontClass(activeIndicScript(items, forceScript));
@@ -439,15 +443,75 @@ function exportPng(): void {
   img.src = url;
 }
 
-/** PDF via the browser print dialog (Save as PDF). */
+const PRINT_FONT_LINKS = [
+  "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap",
+].join("");
+
+/**
+ * PDF via a dedicated print window that contains the *full* standalone SVG
+ * (not the scrolled preview viewport on the right). User picks “Save as PDF”
+ * in the browser print dialog.
+ */
 function exportPdf(): void {
   render();
-  if (currentSvgElement() == null) {
+  const markup = buildStandaloneSvgMarkup();
+  if (markup == null) {
     setStatusError("Export PDF failed: nothing rendered yet");
     return;
   }
-  setStatusOk("Print dialog: choose “Save as PDF” as the destination");
-  window.print();
+  // Do not pass "noopener" here -- it makes window.open() return null in modern
+  // browsers, and we need the handle to write the full SVG and call print().
+  const printWin = window.open("", "_blank");
+  if (printWin == null) {
+    setStatusError("Export PDF failed: popup blocked — allow popups, then try again");
+    return;
+  }
+  const title = escapeHtml(baseName());
+  printWin.document.open();
+  printWin.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="${PRINT_FONT_LINKS}" rel="stylesheet" />
+  <style>
+    @page { margin: 10mm; size: auto; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { padding: 0; }
+    .sheet { width: 100%; }
+    .sheet svg { display: block; width: 100%; height: auto; max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="sheet">${markup}</div>
+</body>
+</html>`);
+  printWin.document.close();
+
+  const triggerPrint = (): void => {
+    try {
+      printWin.focus();
+      printWin.print();
+    } catch {
+      /* ignore */
+    }
+  };
+  // Give the SVG + webfonts a moment to lay out before the print snapshot.
+  printWin.addEventListener("afterprint", () => {
+    try {
+      printWin.close();
+    } catch {
+      /* ignore */
+    }
+  });
+  if (printWin.document.fonts?.ready) {
+    void printWin.document.fonts.ready.then(() => setTimeout(triggerPrint, 50));
+  } else {
+    setTimeout(triggerPrint, 300);
+  }
+  setStatusOk("Print dialog: choose “Save as PDF” — full score (not just the preview pane)");
 }
 
 // ---- Insert helpers ------------------------------------------------------------
@@ -504,6 +568,27 @@ function sampleMenuItems(): MenuItem[] {
   }));
 }
 
+async function playFromStart(): Promise<void> {
+  try {
+    const song = parse(sourceInput.value);
+    playbackHandle = await playSong(song);
+    setStatusOk("Playing… (Play → Stop to cancel)");
+  } catch (err) {
+    if (err instanceof ParseException) {
+      setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
+      selectSourceLine(err.line);
+    } else {
+      setStatusError(`Play failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
+function stopPlay(): void {
+  stopPlayback();
+  playbackHandle = null;
+  setStatusOk("Stopped");
+}
+
 function buildAppMenus(): void {
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   const mod = isMac ? "⌘" : "Ctrl+";
@@ -556,6 +641,13 @@ function buildAppMenus(): void {
         { label: "Export as SVG…", action: exportSvg },
         { label: "Export as PNG…", action: exportPng },
         { label: "Export as PDF…", action: exportPdf },
+      ],
+    },
+    {
+      label: "Play",
+      items: [
+        { label: "Play from Start", shortcut: `${mod}P`, action: () => void playFromStart() },
+        { label: "Stop", shortcut: `${mod}.`, action: () => stopPlay() },
       ],
     },
     {
@@ -657,6 +749,12 @@ window.addEventListener("keydown", (ev) => {
   } else if (key === "n") {
     ev.preventDefault();
     newSong();
+  } else if (key === "p") {
+    ev.preventDefault();
+    void playFromStart();
+  } else if (key === ".") {
+    ev.preventDefault();
+    stopPlay();
   }
 });
 

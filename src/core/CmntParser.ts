@@ -730,7 +730,7 @@ class Parser {
         let displayName: string;
         if (number !== null) {
           song.melakarta = number;
-          displayName = Ragas.melakartaName(number);
+          displayName = Ragas.melakartaName(number) ?? name;
           this.pendingAroAvaText = Ragas.melakartaAroAva(number);
         } else if (dwija !== null) {
           // Dwi-madhyama (both M1 and M2) scale -- playback can only use one

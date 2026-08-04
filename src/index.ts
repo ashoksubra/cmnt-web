@@ -41,5 +41,32 @@ export {
   looksLikeRagamTalamHeading,
 } from "./core/RagamTalamDisplay.js";
 export type { RagamTalamParts, RagamTalamDisplayOverrides } from "./core/RagamTalamDisplay.js";
+export {
+  melakartaNumberForName,
+  melakartaName,
+  melakartaAroAva,
+  janyaForName,
+  dwijaForName,
+  janyaAroAva,
+  dwijaAroAva,
+  janyaCount,
+  dwijaCount,
+  lookupAny,
+  encodeUserSequence,
+  decodeForEditing,
+  MELAKARTA_NAMES,
+} from "./core/Ragas.js";
+export type { JanyaRaga, RagaKind, RagaLookup } from "./core/Ragas.js";
+export { melakartaVariantNumbers, melakartaVariants, VARIANT_SEMITONE } from "./core/Melakarta.js";
+export {
+  planNotes,
+  playSong,
+  stopPlayback,
+  parseDynMark,
+  extractRagaMapping,
+} from "./core/Playback.js";
+export type { PlannedNote, DynMark, PlaybackHandle } from "./core/Playback.js";
+export { defaultMeasureCellWidth } from "./render/SvgScore.js";
+export type { CellWidthMeasurer } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
 export type { SchoolId, SchoolPreset, UiLangOverride } from "./theme/schools.js";

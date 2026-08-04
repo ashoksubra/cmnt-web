@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+import { parse } from "@cmnt/core/CmntParser";
+import { planNotes, parseDynMark, extractRagaMapping } from "@cmnt/core/Playback";
+
+describe("parseDynMark", () => {
+  it("pulls volume tags out of gamaka text", () => {
+    expect(parseDynMark("v3")).toEqual({ volumeLevel: 3, gamaka: null });
+    expect(parseDynMark("~~v2")).toEqual({ volumeLevel: 2, gamaka: "~~" });
+    expect(parseDynMark("~")).toEqual({ volumeLevel: null, gamaka: "~" });
+  });
+});
+
+describe("planNotes", () => {
+  it("plans pitched notes for a short Adi line", () => {
+    const song = parse(
+      ["Tala: Adi", "DefaultSpeed: 0", "Language: English", "S: s r g m", "L: sa ri ga ma", ""].join("\n"),
+    );
+    const notes = planNotes(song);
+    expect(notes.length).toBeGreaterThanOrEqual(4);
+    expect(notes[0]!.midi).toBe(60); // Sa = middle C
+    expect(notes.every((n) => n.endSec > n.startSec)).toBe(true);
+  });
+
+  it("uses melakarta variants when Melakarta is set", () => {
+    const song = parse(
+      [
+        "Melakarta: 15",
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "S: s r g m",
+        "L: . . . .",
+        "",
+      ].join("\n"),
+    );
+    expect(song.melakarta).toBe(15);
+    const notes = planNotes(song);
+    // Mayamalavagowla: R1=1, G3=4, M1=5 → midi 61, 64, 65
+    expect(notes.map((n) => n.midi)).toEqual([60, 61, 64, 65]);
+  });
+});
+
+describe("extractRagaMapping", () => {
+  it("reads R2/G3 style tokens from an Aro heading", () => {
+    const song = parse(
+      [
+        'Heading: "Aro: S R2 G3 M1 P D2 N3 S\' - Ava: S\' N3 D2 P M1 G3 R2 S",center,12',
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "S: s r",
+        "L: . .",
+        "",
+      ].join("\n"),
+    );
+    const map = extractRagaMapping(song);
+    expect(map.get("r")).toBe(2);
+    expect(map.get("g")).toBe(4);
+  });
+});

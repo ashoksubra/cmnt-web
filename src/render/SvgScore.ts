@@ -51,7 +51,16 @@ export type SvgScoreOptions = {
    * the user can correct imperfect automatic transliterations.
    */
   ragamTalamOverrides?: RagamTalamDisplayOverrides;
+  /**
+   * Optional cell-width function (e.g. browser canvas `measureText`) so columns
+   * respect glyph width like the JAR's FontMetrics path. When omitted, widths
+   * are duration-weighted estimates only.
+   */
+  measureCellWidth?: CellWidthMeasurer;
 };
+
+/** Measures one layout cell's natural width in px. */
+export type CellWidthMeasurer = (cell: Cell, unitWidthScale: number) => number;
 
 /** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
 function languageScript(language: string | null | undefined, forceScript: Script | undefined): Script {
@@ -84,10 +93,11 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
   const marginTop = options.marginTop ?? DEFAULT_MARGIN_TOP;
   const unitWidthScale = options.unitWidthScale ?? 1;
   const rowSpacingScale = options.rowSpacingScale ?? 1;
+  const measure = options.measureCellWidth ?? defaultMeasureCellWidth;
   const usableWidth = Math.max(50, contentWidth - ROW_LABEL_GUTTER);
   const width = contentWidth + marginX * 2;
 
-  const alignedWidths = alignAllSections(items, usableWidth, unitWidthScale);
+  const alignedWidths = alignAllSections(items, usableWidth, unitWidthScale, measure);
 
   const body: string[] = [];
   let y = marginTop;
@@ -120,7 +130,7 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
       );
       y += 22;
     } else {
-      const widths = alignedWidths.get(item) ?? item.cells.map((c) => measureCellWidth(c, unitWidthScale));
+      const widths = alignedWidths.get(item) ?? item.cells.map((c) => measure(c, unitWidthScale));
       const res = renderRow(item, marginX, y, options.forceScript, widths, rowSpacingScale);
       if (res.svg) body.push(res.svg);
       y = res.nextY;
@@ -197,7 +207,7 @@ function renderHeading(
   return { svg: parts.join("\n"), nextY: ly + 4 };
 }
 
-function measureCellWidth(c: Cell, unitWidthScale = 1): number {
+export function defaultMeasureCellWidth(c: Cell, unitWidthScale = 1): number {
   if (c.kind === "marker") return MARKER_WIDTH;
   if (c.kind === "gap") return GAP_WIDTH;
   if (c.kind === "gati") return GATI_WIDTH;
@@ -278,13 +288,18 @@ function distributeSpan(row: VisualRow, natural: number[], out: number[], start:
 }
 
 /** Aligns anga columns across a single section's rows; returns each row's per-cell widths. */
-export function alignSection(rows: VisualRow[], targetWidth: number, unitWidthScale = 1): Map<VisualRow, number[]> {
+export function alignSection(
+  rows: VisualRow[],
+  targetWidth: number,
+  unitWidthScale = 1,
+  measure: CellWidthMeasurer = defaultMeasureCellWidth,
+): Map<VisualRow, number[]> {
   const natural = new Map<VisualRow, number[]>();
   let maxSpans = 0;
   const allSpans: Span[][] = [];
 
   for (const row of rows) {
-    const cw = row.cells.map((c) => measureCellWidth(c, unitWidthScale));
+    const cw = row.cells.map((c) => measure(c, unitWidthScale));
     natural.set(row, cw);
     const spans = splitSpans(row, cw);
     allSpans.push(spans);
@@ -354,12 +369,17 @@ export function alignSection(rows: VisualRow[], targetWidth: number, unitWidthSc
 }
 
 /** Groups `items` into sections (runs of consecutive `VisualRow`s) and aligns each independently. */
-export function alignAllSections(items: LayoutItem[], targetWidth: number, unitWidthScale = 1): Map<VisualRow, number[]> {
+export function alignAllSections(
+  items: LayoutItem[],
+  targetWidth: number,
+  unitWidthScale = 1,
+  measure: CellWidthMeasurer = defaultMeasureCellWidth,
+): Map<VisualRow, number[]> {
   const out = new Map<VisualRow, number[]>();
   let section: VisualRow[] = [];
   const flush = (): void => {
     if (section.length === 0) return;
-    const aligned = alignSection(section, targetWidth, unitWidthScale);
+    const aligned = alignSection(section, targetWidth, unitWidthScale, measure);
     for (const [row, widths] of aligned) out.set(row, widths);
     section = [];
   };

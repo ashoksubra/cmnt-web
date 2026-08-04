@@ -172,28 +172,51 @@ body {
   display: block;
 }
 
+/* Fallback if the user prints the main window (File → Export PDF uses a
+   dedicated full-score window instead). Unclip every overflow/height so the
+   whole SVG prints, not only the visible right-hand preview viewport. */
 @media print {
+  html,
   body {
-    background: #ffffff;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    display: block !important;
   }
   .app-header,
   .editor-pane {
     display: none !important;
   }
   .composer {
-    display: block;
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    grid-template-columns: none !important;
+    grid-template-rows: none !important;
   }
-  .preview-pane {
-    overflow: visible;
-    background: #ffffff;
+  .preview-pane,
+  .preview-scroll,
+  .score-page {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
   }
   .preview-scroll {
-    padding: 0;
+    padding: 0 !important;
   }
   .score-page {
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .score-page svg {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
   }
 }
 
