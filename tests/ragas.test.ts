@@ -17,8 +17,7 @@ describe("Ragas", () => {
   it("formats melakarta 29 Aro/Ava with subscript variants", () => {
     const text = melakartaAroAva(29);
     expect(text).not.toBeNull();
-    expect(text).toMatch(/^Aro: S R₂ G₃ M₁ P D₂ N₃ S' - Ava:/);
-    expect(text).toContain("Ava:");
+    expect(text).toBe("ArO: S R₂ G₃ M₁ P D₂ N₃ S' - avarO: S' N₃ D₂ P M₁ G₃ R₂ S");
   });
 
   it("resolves janya Hamsadhwani (alternate spelling)", () => {
@@ -27,7 +26,7 @@ describe("Ragas", () => {
     expect(j!.melakarta).toBe(29);
     expect(j!.aro).toBe("SRGPNS");
     const aroAva = janyaAroAva(j!);
-    expect(aroAva).toMatch(/^Aro: /);
+    expect(aroAva).toMatch(/^ArO: /);
   });
 
   it("resolves Sankachakra janya Purnachandrika", () => {

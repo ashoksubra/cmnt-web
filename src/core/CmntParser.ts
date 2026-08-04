@@ -106,6 +106,8 @@ class Parser {
   private pendingRagamClause: string | null = null;
   private pendingTalamClause: string | null = null;
   private pendingAroAvaText: string | null = null;
+  private pendingRagaDisplayRoman: string | null = null;
+  private pendingTalaDisplayRoman: string | null = null;
   private talaIsPlaceholder = false; // song was lazily created before a real Tala: was seen
   private layout: string | null = null;
   private compact = true;
@@ -195,12 +197,16 @@ class Parser {
       h.fontSize = this.headingPrefs.fontSize;
       h.language = this.curLang;
       h.role = "ragamTalam";
+      h.ragaDisplayRoman = this.pendingRagaDisplayRoman;
+      h.talaDisplayRoman = this.pendingTalaDisplayRoman;
       this.ragamTalamHeading = h;
       song.add(h);
     } else {
       this.ragamTalamHeading.text = text;
       this.ragamTalamHeading.language = this.curLang;
       this.ragamTalamHeading.role = "ragamTalam";
+      this.ragamTalamHeading.ragaDisplayRoman = this.pendingRagaDisplayRoman;
+      this.ragamTalamHeading.talaDisplayRoman = this.pendingTalaDisplayRoman;
     }
   }
 
@@ -709,6 +715,26 @@ class Parser {
           throw new ParseException(`invalid CellSpacing value '${keyval}' (must be 0.1-3.0)`, lineNo);
         }
         song.cellSpacing = n;
+        continue;
+      }
+
+      if (key === "raagamdisplay" || key === "ragamdisplay") {
+        const v = (keyval ?? "").trim();
+        this.pendingRagaDisplayRoman = v === "" ? null : v;
+        song.ragaDisplayRoman = this.pendingRagaDisplayRoman;
+        if (this.ragamTalamHeading != null) {
+          this.ragamTalamHeading.ragaDisplayRoman = this.pendingRagaDisplayRoman;
+        }
+        continue;
+      }
+
+      if (key === "talamdisplay" || key === "taladisplay") {
+        const v = (keyval ?? "").trim();
+        this.pendingTalaDisplayRoman = v === "" ? null : v;
+        song.talaDisplayRoman = this.pendingTalaDisplayRoman;
+        if (this.ragamTalamHeading != null) {
+          this.ragamTalamHeading.talaDisplayRoman = this.pendingTalaDisplayRoman;
+        }
         continue;
       }
 

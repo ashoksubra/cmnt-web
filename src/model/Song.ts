@@ -20,6 +20,10 @@ export class Song {
   rowSpacing = 1.0;
   cellSpacing = 1.0;
   ragaName: string | null = null;
+  /** Optional CMNT-roman display spelling (RaagamDisplay:) for Indic scores. */
+  ragaDisplayRoman: string | null = null;
+  /** Optional CMNT-roman display spelling (TalamDisplay:). */
+  talaDisplayRoman: string | null = null;
 
   constructor(tala: Tala) {
     this.tala = tala;

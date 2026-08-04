@@ -286,9 +286,14 @@ const TOP_KEYS = new Set([
   "raga",
   "ragam",
   "raagam",
+  "ragadisplay",
+  "ragamdisplay",
+  "raagamdisplay",
   "melakarta",
   "tala",
   "talam",
+  "taladisplay",
+  "talamdisplay",
   "speed",
   "defaultspeed",
   "language",
@@ -368,9 +373,13 @@ function translate(raw: YamlMap): string[] {
   const melakarta = str(m.melakarta);
   if (melakarta !== null) out.push(`Melakarta: ${melakarta}`);
   if (raga !== null) out.push(`Raagam: ${raga}`);
+  const ragaDisplay = firstNonNull(str(m.ragadisplay), str(m.ragamdisplay), str(m.raagamdisplay));
+  if (ragaDisplay !== null) out.push(`RaagamDisplay: ${ragaDisplay}`);
 
   const tala = firstNonNull(str(m.tala), str(m.talam));
   if (tala !== null) out.push(`Tala: ${tala}`);
+  const talaDisplay = firstNonNull(str(m.taladisplay), str(m.talamdisplay));
+  if (talaDisplay !== null) out.push(`TalamDisplay: ${talaDisplay}`);
   const speed = firstNonNull(str(m.speed), str(m.defaultspeed));
   if (speed !== null) out.push(`DefaultSpeed: ${speed}`);
   const speedMarks = str(m.speedmarks);

@@ -213,17 +213,19 @@ export function melakartaAroAva(number: number): string | null {
   const m = withVariant("M", v.m);
   const d = withVariant("D", v.d);
   const n = withVariant("N", v.n);
-  return `Aro: S ${r} ${g} ${m} P ${d} ${n} S' - Ava: S' ${n} ${d} P ${m} ${g} ${r} S`;
+  // ArO / avarO are CMNT-roman forms that Tamil-transliterate cleanly (ஆரோ / அவரோ);
+  // legacy "Aro"/"Ava" garbled under syllable translit.
+  return `ArO: S ${r} ${g} ${m} P ${d} ${n} S' - avarO: S' ${n} ${d} P ${m} ${g} ${r} S`;
 }
 
 export function janyaAroAva(j: JanyaRaga): string | null {
   const v = melakartaVariantNumbers(j.melakarta);
-  return `Aro: ${formatSequence(j.aro, v, true)} - Ava: ${formatSequence(j.ava, v, false)}`;
+  return `ArO: ${formatSequence(j.aro, v, true)} - avarO: ${formatSequence(j.ava, v, false)}`;
 }
 
 export function dwijaAroAva(j: JanyaRaga): string | null {
   const v = melakartaVariantNumbers(j.melakarta);
-  return `Aro: ${formatSequence(j.aro, v, true)} - Ava: ${formatSequence(j.ava, v, false)}`;
+  return `ArO: ${formatSequence(j.aro, v, true)} - avarO: ${formatSequence(j.ava, v, false)}`;
 }
 
 function formatSequence(

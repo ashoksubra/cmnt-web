@@ -1,13 +1,22 @@
 import { parse, ParseException } from "@cmnt/core/CmntParser";
-import { layoutSong, VisualHeading, VisualRow } from "@cmnt/core/Layout";
+import { VisualHeading, VisualRow } from "@cmnt/core/Layout";
 import type { LayoutItem } from "@cmnt/core/Layout";
+import { layoutSongFitting } from "@cmnt/core/LayoutFitting";
 import { renderScoreSvg } from "@cmnt/render/SvgScore";
+import {
+  LETTER_CONTENT_HEIGHT,
+  LETTER_CONTENT_WIDTH,
+  LETTER_MARGIN_X,
+  LETTER_MARGIN_Y,
+  LETTER_PAGE_HEIGHT_PX,
+  LETTER_PAGE_WIDTH_PX,
+  paginateLayoutItems,
+} from "@cmnt/render/ScorePagination";
 import { scriptFor } from "@cmnt/core/Translit";
 import type { Script } from "@cmnt/core/Translit";
 import {
-  autoRagamDisplayName,
-  autoTalamDisplayName,
   parseRagamTalamHeading,
+  upsertDisplayDirectives,
 } from "@cmnt/core/RagamTalamDisplay";
 import { TALA_NAMES } from "@cmnt/core/Talas";
 import {
@@ -70,6 +79,7 @@ const stopBtn = document.querySelector<HTMLButtonElement>("#stop-btn")!;
 const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!;
 const talamDisplay = document.querySelector<HTMLInputElement>("#talam-display")!;
 const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
+const saveHeadersBtn = document.querySelector<HTMLButtonElement>("#save-headers-btn")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
@@ -78,6 +88,9 @@ let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 /** Once the user edits a name field, keep their text until Reset / fixture change. */
 let ragamNameDirty = false;
 let talamNameDirty = false;
+/** Last roman display spellings loaded from the parsed song (RaagamDisplay:/TalamDisplay:). */
+let loadedRagaRoman = "";
+let loadedTalaRoman = "";
 let playbackHandle: PlaybackHandle | null = null;
 
 function currentPlaybackSpeed(): number {
@@ -226,21 +239,30 @@ function findRagamTalamHeading(items: LayoutItem[]) {
   return null;
 }
 
-function syncHeaderFields(items: LayoutItem[], forceScript: Script | undefined): void {
+function syncHeaderFields(items: LayoutItem[]): void {
   const h = findRagamTalamHeading(items);
   const parts = h != null ? parseRagamTalamHeading(h.text) : null;
   if (parts == null) {
     if (!ragamNameDirty) ragamDisplay.value = "";
     if (!talamNameDirty) talamDisplay.value = "";
+    loadedRagaRoman = "";
+    loadedTalaRoman = "";
     ragamDisplay.disabled = true;
     talamDisplay.disabled = true;
     return;
   }
   ragamDisplay.disabled = parts.ragaName == null;
   talamDisplay.disabled = parts.talaName == null;
-  const script = forceScript !== undefined ? forceScript : scriptFor(h!.language?.split(":")[0] ?? null);
-  if (!ragamNameDirty) ragamDisplay.value = autoRagamDisplayName(parts, script);
-  if (!talamNameDirty) talamDisplay.value = autoTalamDisplayName(parts, script);
+  loadedRagaRoman = h?.ragaDisplayRoman ?? "";
+  loadedTalaRoman = h?.talaDisplayRoman ?? "";
+  // Fields edit CMNT-roman display spellings (persisted), not the on-score glyphs.
+  if (!ragamNameDirty) ragamDisplay.value = loadedRagaRoman;
+  if (!talamNameDirty) talamDisplay.value = loadedTalaRoman;
+  // Keep placeholders informative with the catalogue name.
+  ragamDisplay.placeholder =
+    parts.ragaName != null ? `optional CMNT spelling (catalogue: ${parts.ragaName})` : "optional CMNT spelling";
+  talamDisplay.placeholder =
+    parts.talaName != null ? `optional CMNT spelling (catalogue: ${parts.talaName})` : "optional CMNT spelling";
 }
 
 function clearHeaderOverrides(): void {
@@ -248,25 +270,58 @@ function clearHeaderOverrides(): void {
   talamNameDirty = false;
 }
 
-function render(): void {
-  const text = sourceInput.value;
-  const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
+function applyDisplayNamesToSource(clear = false): void {
+  const raga = clear ? "" : ragamDisplay.value.trim();
+  const tala = clear ? "" : talamDisplay.value.trim();
+  sourceInput.value = upsertDisplayDirectives(sourceInput.value, {
+    ragaRoman: raga,
+    talaRoman: tala,
+  });
+  ragamNameDirty = false;
+  talamNameDirty = false;
+  markDirty();
+  render();
+  setStatusOk(
+    clear
+      ? "Cleared RaagamDisplay:/TalamDisplay: from source — File → Save to keep"
+      : "Wrote display spellings into source — File → Save to keep",
+  );
+}
 
+/** On-screen preview width (px). */
+const PREVIEW_CONTENT_WIDTH = 1100;
+const ROW_LABEL_GUTTER = 36;
+
+function renderScoreAtWidth(contentWidth: number): { svg: string; items: LayoutItem[]; forceScript: Script | undefined } {
+  const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
+  const song = parse(sourceInput.value);
+  const unitWidthScale = currentSchool.density.unitWidthScale;
+  const measureCellWidth = createCanvasCellMeasurer({ forceScript });
+  // Cycle-fit only (JAR layoutFittingLetter). Do not mid-wrap cells — short
+  // fragments get full-width stretched and look orphaned in PDF.
+  const items = layoutSongFitting(song, {
+    targetWidth: Math.max(50, contentWidth - ROW_LABEL_GUTTER),
+    unitWidthScale,
+    measureCellWidth,
+  });
+  const svg = renderScoreSvg(items, {
+    contentWidth,
+    forceScript,
+    unitWidthScale,
+    rowSpacingScale: currentSchool.density.rowSpacingScale,
+    ragamTalamOverrides: {
+      ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
+      talaRoman: talamNameDirty ? talamDisplay.value : loadedTalaRoman || undefined,
+    },
+    measureCellWidth,
+  });
+  return { svg, items, forceScript };
+}
+
+function render(): void {
   try {
-    const song = parse(text);
-    const items = layoutSong(song);
-    syncHeaderFields(items, forceScript);
-    const svg = renderScoreSvg(items, {
-      contentWidth: 1100,
-      forceScript,
-      unitWidthScale: currentSchool.density.unitWidthScale,
-      rowSpacingScale: currentSchool.density.rowSpacingScale,
-      ragamTalamOverrides: {
-        ragaName: ragamNameDirty ? ragamDisplay.value : undefined,
-        talaName: talamNameDirty ? talamDisplay.value : undefined,
-      },
-      measureCellWidth: createCanvasCellMeasurer({ forceScript }),
-    });
+    const { svg, items, forceScript } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
+    syncHeaderFields(items);
     scorePage.innerHTML = svg;
     applyLangFontClass(activeIndicScript(items, forceScript));
     setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
@@ -319,18 +374,27 @@ function currentSvgElement(): SVGSVGElement | null {
   return scorePage.querySelector("svg");
 }
 
-function buildStandaloneSvgMarkup(): string | null {
+function themeVarDecls(): string {
   const svgEl = currentSvgElement();
-  if (!svgEl) return null;
-  const clone = svgEl.cloneNode(true) as SVGSVGElement;
-  const computed = getComputedStyle(svgEl);
-  const varDecls = EXPORT_CSS_VARS.map((name) => `${name}: ${computed.getPropertyValue(name).trim()}`).join("; ");
-  clone.setAttribute("style", varDecls);
-  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  const styleTag = document.createElementNS("http://www.w3.org/2000/svg", "style");
-  styleTag.textContent = stylesCssRaw;
-  clone.insertBefore(styleTag, clone.firstChild);
-  return new XMLSerializer().serializeToString(clone);
+  const computed = svgEl != null ? getComputedStyle(svgEl) : getComputedStyle(scorePage);
+  return EXPORT_CSS_VARS.map((name) => `${name}: ${computed.getPropertyValue(name).trim()}`).join("; ");
+}
+
+/** Standalone SVG for export (SVG/PNG). Pass a content width to re-layout. */
+function buildStandaloneSvgMarkup(contentWidth?: number): string | null {
+  let svgMarkup: string;
+  if (contentWidth != null) {
+    try {
+      svgMarkup = renderScoreAtWidth(contentWidth).svg;
+    } catch {
+      return null;
+    }
+  } else {
+    const svgEl = currentSvgElement();
+    if (!svgEl) return null;
+    svgMarkup = new XMLSerializer().serializeToString(svgEl);
+  }
+  return decorateSvgMarkup(svgMarkup);
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -359,7 +423,21 @@ function saveTextDownload(fileName: string): void {
   setStatusOk(`Downloaded ${fileName}`);
 }
 
+/** Flush live roman display fields into source before File → Save / export. */
+function flushDisplayNamesIfDirty(): void {
+  if (!ragamNameDirty && !talamNameDirty) return;
+  sourceInput.value = upsertDisplayDirectives(sourceInput.value, {
+    ragaRoman: ragamDisplay.value.trim(),
+    talaRoman: talamDisplay.value.trim(),
+  });
+  ragamNameDirty = false;
+  talamNameDirty = false;
+  loadedRagaRoman = ragamDisplay.value.trim();
+  loadedTalaRoman = talamDisplay.value.trim();
+}
+
 async function saveFile(forceSaveAs: boolean): Promise<void> {
+  flushDisplayNamesIfDirty();
   const text = sourceInput.value;
   const picker = (window as unknown as {
     showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle>;
@@ -484,15 +562,73 @@ const PRINT_FONT_LINKS = [
   "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap",
 ].join("");
 
+/** Decorate a raw SVG string with theme vars + app CSS (for print/export). */
+function decorateSvgMarkup(svgMarkup: string): string | null {
+  const doc = new DOMParser().parseFromString(svgMarkup, "image/svg+xml");
+  const clone = doc.documentElement;
+  if (clone == null || clone.nodeName.toLowerCase() !== "svg") return null;
+  clone.setAttribute("style", themeVarDecls());
+  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const styleTag = doc.createElementNS("http://www.w3.org/2000/svg", "style");
+  styleTag.textContent = stylesCssRaw;
+  clone.insertBefore(styleTag, clone.firstChild);
+  return new XMLSerializer().serializeToString(clone);
+}
+
 /**
- * PDF via a dedicated print window that contains the *full* standalone SVG
- * (not the scrolled preview viewport on the right). User picks “Save as PDF”
- * in the browser print dialog.
+ * Letter-paginated SVGs for PDF: cycle-fit layout, section-aligned columns,
+ * no orphan section titles at the bottom of a page.
+ */
+function buildLetterPdfPages(): string[] | null {
+  try {
+    const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
+    const song = parse(sourceInput.value);
+    const unitWidthScale = currentSchool.density.unitWidthScale;
+    const rowSpacingScale = currentSchool.density.rowSpacingScale;
+    const measureCellWidth = createCanvasCellMeasurer({ forceScript });
+    const items = layoutSongFitting(song, {
+      targetWidth: Math.max(50, LETTER_CONTENT_WIDTH - ROW_LABEL_GUTTER),
+      unitWidthScale,
+      measureCellWidth,
+    });
+    const pages = paginateLayoutItems(items, {
+      pageContentHeight: LETTER_CONTENT_HEIGHT,
+      rowSpacingScale,
+    });
+    const svgs: string[] = [];
+    for (const pageItems of pages) {
+      const raw = renderScoreSvg(pageItems, {
+        contentWidth: LETTER_CONTENT_WIDTH,
+        marginX: LETTER_MARGIN_X,
+        marginTop: LETTER_MARGIN_Y,
+        minHeight: LETTER_PAGE_HEIGHT_PX,
+        forceScript,
+        unitWidthScale,
+        rowSpacingScale,
+        ragamTalamOverrides: {
+          ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
+          talaRoman: talamNameDirty ? talamDisplay.value : loadedTalaRoman || undefined,
+        },
+        measureCellWidth,
+      });
+      const decorated = decorateSvgMarkup(raw);
+      if (decorated == null) return null;
+      svgs.push(decorated);
+    }
+    return svgs;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * PDF via a dedicated print window: one Letter SVG per page (not one tall SVG
+ * sliced by the browser). User picks “Save as PDF” in the print dialog.
  */
 function exportPdf(): void {
-  render();
-  const markup = buildStandaloneSvgMarkup();
-  if (markup == null) {
+  render(); // keep preview in sync / theme classes applied
+  const pages = buildLetterPdfPages();
+  if (pages == null || pages.length === 0) {
     setStatusError("Export PDF failed: nothing rendered yet");
     return;
   }
@@ -504,6 +640,9 @@ function exportPdf(): void {
     return;
   }
   const title = escapeHtml(baseName());
+  const pageDivs = pages
+    .map((svg, i) => `<div class="page${i === pages.length - 1 ? " page-last" : ""}">${svg}</div>`)
+    .join("\n");
   printWin.document.open();
   printWin.document.write(`<!doctype html>
 <html lang="en">
@@ -514,15 +653,22 @@ function exportPdf(): void {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="${PRINT_FONT_LINKS}" rel="stylesheet" />
   <style>
-    @page { margin: 10mm; size: auto; }
+    @page { size: letter; margin: 0; }
     html, body { margin: 0; padding: 0; background: #fff; }
-    body { padding: 0; }
-    .sheet { width: 100%; }
-    .sheet svg { display: block; width: 100%; height: auto; max-width: 100%; }
+    .page {
+      width: ${LETTER_PAGE_WIDTH_PX}px;
+      height: ${LETTER_PAGE_HEIGHT_PX}px;
+      margin: 0 auto;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+    }
+    .page-last { page-break-after: auto; break-after: auto; }
+    .page svg { display: block; width: ${LETTER_PAGE_WIDTH_PX}px; height: ${LETTER_PAGE_HEIGHT_PX}px; }
   </style>
 </head>
 <body>
-  <div class="sheet">${markup}</div>
+${pageDivs}
 </body>
 </html>`);
   printWin.document.close();
@@ -544,11 +690,11 @@ function exportPdf(): void {
     }
   });
   if (printWin.document.fonts?.ready) {
-    void printWin.document.fonts.ready.then(() => setTimeout(triggerPrint, 50));
+    void printWin.document.fonts.ready.then(() => setTimeout(triggerPrint, 80));
   } else {
-    setTimeout(triggerPrint, 300);
+    setTimeout(triggerPrint, 350);
   }
-  setStatusOk("Print dialog: choose “Save as PDF” — full score (not just the preview pane)");
+  setStatusOk(`Print dialog: ${pages.length} Letter page(s) — choose “Save as PDF”`);
 }
 
 // ---- Insert helpers ------------------------------------------------------------
@@ -776,10 +922,8 @@ talamDisplay.addEventListener("input", () => {
   talamNameDirty = true;
   scheduleRender();
 });
-resetHeadersBtn.addEventListener("click", () => {
-  clearHeaderOverrides();
-  render();
-});
+saveHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(false));
+resetHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(true));
 openFileInput.addEventListener("change", () => {
   const file = openFileInput.files?.[0];
   if (file) void openFileFromInput(file);

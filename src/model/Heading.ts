@@ -13,9 +13,14 @@ export class Heading implements SongPart {
   /**
    * Special heading roles. `"ragamTalam"` is the combined
    * "Ragam : … | Talam : …" line built by the parser -- renderers localize
-   * labels/names into the score language and accept on-screen name overrides.
+   * labels into the score language; catalogue names stay roman unless
+   * RaagamDisplay:/TalamDisplay: CMNT-roman overrides are set.
    */
   role: "ragamTalam" | null = null;
+  /** CMNT-roman spelling from RaagamDisplay: (transliterated for Indic scripts). */
+  ragaDisplayRoman: string | null = null;
+  /** CMNT-roman spelling from TalamDisplay:. */
+  talaDisplayRoman: string | null = null;
 
   constructor(text: string) {
     this.text = text;

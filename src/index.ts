@@ -22,9 +22,29 @@ export {
   shortenSwaraDisplay,
 } from "./core/Layout.js";
 export type { CellKind, LayoutItem } from "./core/Layout.js";
+export {
+  layoutSongFitting,
+  wrapVisualRowToWidth,
+  wrapLayoutItemsToWidth,
+  maxNaturalRowWidth,
+} from "./core/LayoutFitting.js";
+export type { LayoutFittingOptions } from "./core/LayoutFitting.js";
 export { dumpLayoutItems } from "./core/dumpLayout.js";
-export { renderScoreSvg, alignSection, alignAllSections } from "./render/SvgScore.js";
+export { renderScoreSvg, renderScoreSvgPages, alignSection, alignAllSections } from "./render/SvgScore.js";
 export type { SvgScoreOptions } from "./render/SvgScore.js";
+export {
+  paginateLayoutItems,
+  estimateItemHeight,
+  estimateRowHeight,
+  estimateHeadingHeight,
+  LETTER_CONTENT_WIDTH,
+  LETTER_CONTENT_HEIGHT,
+  LETTER_PAGE_WIDTH_PX,
+  LETTER_PAGE_HEIGHT_PX,
+  LETTER_MARGIN_X,
+  LETTER_MARGIN_Y,
+} from "./render/ScorePagination.js";
+export type { PaginationOptions } from "./render/ScorePagination.js";
 export {
   scriptFor,
   transliterate,
@@ -36,9 +56,11 @@ export type { Script } from "./core/Translit.js";
 export {
   parseRagamTalamHeading,
   formatRagamTalamDisplay,
+  formatAroAvaDisplay,
   autoRagamDisplayName,
   autoTalamDisplayName,
   looksLikeRagamTalamHeading,
+  upsertDisplayDirectives,
 } from "./core/RagamTalamDisplay.js";
 export type { RagamTalamParts, RagamTalamDisplayOverrides } from "./core/RagamTalamDisplay.js";
 export {

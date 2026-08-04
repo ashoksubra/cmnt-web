@@ -82,17 +82,32 @@
           <button id="stop-btn" type="button" class="secondary-btn" title="Stop (⌘/Ctrl+.)">■ Stop</button>
         </div>
 
-        <div class="header-overrides" title="Raagam/Taalam follow the score language. Edit if automatic transliteration is imperfect.">
+        <div class="header-overrides" title="Catalogue raga/tala names stay roman on Indic scores (safe). Optional CMNT-roman spellings (with @/#/~n) are saved as RaagamDisplay:/TalamDisplay: and transliterated.">
           <label class="field field-grow">
-            <span>Raagam (on score)</span>
-            <input id="ragam-display" type="text" spellcheck="false" autocomplete="off" />
+            <span>Raagam display (roman)</span>
+            <input
+              id="ragam-display"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="optional CMNT spelling e.g. pUrNa@ncandrikA"
+            />
           </label>
           <label class="field field-grow">
-            <span>Taalam (on score)</span>
-            <input id="talam-display" type="text" spellcheck="false" autocomplete="off" />
+            <span>Taalam display (roman)</span>
+            <input
+              id="talam-display"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="optional CMNT spelling e.g. rUpakam"
+            />
           </label>
-          <button id="reset-headers-btn" type="button" class="secondary-btn" title="Restore auto-transliterated names">
-            Reset names
+          <button id="save-headers-btn" type="button" class="secondary-btn" title="Write RaagamDisplay:/TalamDisplay: into the source (persists on Save)">
+            Save names
+          </button>
+          <button id="reset-headers-btn" type="button" class="secondary-btn" title="Clear display spellings and remove directives from source">
+            Clear names
           </button>
         </div>
 

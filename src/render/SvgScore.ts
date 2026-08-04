@@ -29,6 +29,11 @@ export type SvgScoreOptions = {
   /** Top page margin, in px. */
   marginTop?: number;
   /**
+   * When set, the SVG canvas height is at least this value (Letter page body).
+   * Used for paginated PDF so each page has a stable media box.
+   */
+  minHeight?: number;
+  /**
    * Override the auto-detected script (from each row/heading's `Language:`)
    * for every row/heading in the score -- e.g. for a live preview UI that
    * lets the user force Tamil/English regardless of the source's directives.
@@ -137,7 +142,7 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
     }
   }
 
-  const height = Math.round(y + 40);
+  const height = Math.max(Math.round(y + 40), Math.round(options.minHeight ?? 0));
   const background = `<rect class="cmnt-page-bg" x="0" y="0" width="${width}" height="${height}" />`;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" class="cmnt-score" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n` +
@@ -146,6 +151,17 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
     body.join("\n") +
     `\n</svg>\n`
   );
+}
+
+/**
+ * Render each paginated slice as its own Letter-sized SVG (for PDF/print).
+ * Call {@link paginateLayoutItems} first, or pass pre-sliced pages.
+ */
+export function renderScoreSvgPages(
+  pages: LayoutItem[][],
+  options: SvgScoreOptions = {},
+): string[] {
+  return pages.map((pageItems) => renderScoreSvg(pageItems, options));
 }
 
 function stripWiky(s: string): string {
@@ -172,9 +188,11 @@ function renderHeading(
   if (isRagamTalam) {
     const parts = parseRagamTalamHeading(rawText);
     if (parts != null) {
-      // Always run through the localized formatter (even for English) so label
-      // wording stays consistent and name overrides apply.
-      rawText = formatRagamTalamDisplay(parts, script, ragamTalamOverrides ?? {});
+      const merged: RagamTalamDisplayOverrides = {
+        ragaRoman: ragamTalamOverrides?.ragaRoman ?? h.ragaDisplayRoman ?? null,
+        talaRoman: ragamTalamOverrides?.talaRoman ?? h.talaDisplayRoman ?? null,
+      };
+      rawText = formatRagamTalamDisplay(parts, script, merged);
     } else if (script != null) {
       rawText = transliterateHeading(rawText, script);
     }
@@ -350,6 +368,17 @@ export function alignSection(
   if (total > targetWidth && total > 0) {
     const scale = targetWidth / total;
     for (let i = 0; i < spanTarget.length; i++) spanTarget[i]! *= scale;
+    total = targetWidth;
+  } else if (total < targetWidth && total > 0) {
+    // Expand timed content so the section fills left–right (justified).
+    const slack = targetWidth - total;
+    if (durSum > 0) {
+      for (let i = 0; i < maxSpans; i++) {
+        if (isMarkerSpan[i] || spanDur[i]! <= 0) continue;
+        spanTarget[i]! += slack * (spanDur[i]! / durSum);
+      }
+      total = targetWidth;
+    }
   }
 
   const out = new Map<VisualRow, number[]>();
@@ -362,6 +391,16 @@ export function alignSection(
       const s = spans[si]!;
       const target = si < spanTarget.length ? spanTarget[si]! : s.width;
       distributeSpan(row, nat, aligned, s.start, s.end, target);
+    }
+    // Rows with fewer spans than the section max would otherwise end short of
+    // the right margin — pad the last cell so every row is left+right justified.
+    let rowSum = 0;
+    for (const w of aligned) rowSum += w;
+    if (aligned.length > 0 && rowSum < targetWidth - 0.01) {
+      aligned[aligned.length - 1]! += targetWidth - rowSum;
+    } else if (aligned.length > 0 && rowSum > targetWidth + 0.01) {
+      const scale = targetWidth / rowSum;
+      for (let i = 0; i < aligned.length; i++) aligned[i]! *= scale;
     }
     out.set(row, aligned);
   }

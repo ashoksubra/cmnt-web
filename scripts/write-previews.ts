@@ -10,7 +10,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   parse,
-  layoutSong,
+  layoutSongFitting,
   renderScoreSvg,
   scriptFor,
   VisualHeading,
@@ -43,8 +43,9 @@ function usesTamilScript(items: LayoutItem[]): boolean {
 function renderPreview(name: string, css: string): string {
   const text = readFileSync(resolve(fixturesDir, `${name}.txt`), "utf8");
   const song = parse(text);
-  const items = layoutSong(song);
-  const svg = renderScoreSvg(items, { contentWidth: 1100 });
+  const contentWidth = 1100;
+  const items = layoutSongFitting(song, { targetWidth: contentWidth - 36 });
+  const svg = renderScoreSvg(items, { contentWidth });
   const pageClass = usesTamilScript(items)
     ? "score-page school-classic-print lang-tamil"
     : "score-page school-classic-print";
