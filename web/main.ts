@@ -72,6 +72,7 @@ const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
 const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrument-select")!;
+const defaultSpeedSelect = document.querySelector<HTMLSelectElement>("#default-speed-select")!;
 const speedSlider = document.querySelector<HTMLInputElement>("#speed-slider")!;
 const speedLabel = document.querySelector<HTMLElement>("#speed-label")!;
 const playBtn = document.querySelector<HTMLButtonElement>("#play-btn")!;
@@ -88,6 +89,8 @@ let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 /** Once the user edits a name field, keep their text until Reset / fixture change. */
 let ragamNameDirty = false;
 let talamNameDirty = false;
+/** True while the Base speed dropdown is driving a source rewrite (avoid feedback). */
+let defaultSpeedApplying = false;
 /** Last roman display spellings loaded from the parsed song (RaagamDisplay:/TalamDisplay:). */
 let loadedRagaRoman = "";
 let loadedTalaRoman = "";
@@ -292,7 +295,12 @@ function applyDisplayNamesToSource(clear = false): void {
 const PREVIEW_CONTENT_WIDTH = 1100;
 const ROW_LABEL_GUTTER = 36;
 
-function renderScoreAtWidth(contentWidth: number): { svg: string; items: LayoutItem[]; forceScript: Script | undefined } {
+function renderScoreAtWidth(contentWidth: number): {
+  svg: string;
+  items: LayoutItem[];
+  forceScript: Script | undefined;
+  defaultSpeed: number;
+} {
   const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
   const song = parse(sourceInput.value);
   const unitWidthScale = currentSchool.density.unitWidthScale;
@@ -315,13 +323,60 @@ function renderScoreAtWidth(contentWidth: number): { svg: string; items: LayoutI
     },
     measureCellWidth,
   });
-  return { svg, items, forceScript };
+  return { svg, items, forceScript, defaultSpeed: song.defaultSpeed ?? 0 };
+}
+
+function syncDefaultSpeedField(n: number): void {
+  if (defaultSpeedApplying) return;
+  const v = String(Math.max(0, Math.min(2, Math.trunc(n))));
+  if (defaultSpeedSelect.value !== v) defaultSpeedSelect.value = v;
+}
+
+/** Insert or replace DefaultSpeed: in the source (notation base, not playback tempo). */
+function upsertDefaultSpeedDirective(source: string, n: number): string {
+  const line = `DefaultSpeed: ${n}`;
+  const lines = source.split("\n");
+  const idx = lines.findIndex((l) => /^DefaultSpeed\s*:/i.test(l.trim()));
+  if (idx >= 0) {
+    lines[idx] = line;
+    return lines.join("\n");
+  }
+  let insertAt = lines.findIndex((l) => /^(Tala|Raagam|Ragam|Language)\s*:/i.test(l.trim()));
+  if (insertAt < 0) {
+    let sawOpen = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]!.trim() === "---") {
+        if (!sawOpen) sawOpen = true;
+        else {
+          insertAt = i;
+          break;
+        }
+      }
+    }
+  }
+  if (insertAt >= 0) lines.splice(insertAt + 1, 0, line);
+  else lines.unshift(line);
+  return lines.join("\n");
+}
+
+function applyDefaultSpeedFromUi(): void {
+  const n = Number.parseInt(defaultSpeedSelect.value, 10);
+  if (![0, 1, 2].includes(n)) return;
+  defaultSpeedApplying = true;
+  sourceInput.value = upsertDefaultSpeedDirective(sourceInput.value, n);
+  markDirty();
+  render();
+  defaultSpeedApplying = false;
+  setStatusOk(
+    `DefaultSpeed: ${n} — inline ( ) raises one level, (( )) two, relative to this base`,
+  );
 }
 
 function render(): void {
   try {
-    const { svg, items, forceScript } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
+    const { svg, items, forceScript, defaultSpeed } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
     syncHeaderFields(items);
+    syncDefaultSpeedField(defaultSpeed);
     scorePage.innerHTML = svg;
     applyLangFontClass(activeIndicScript(items, forceScript));
     setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
@@ -699,6 +754,11 @@ ${pageDivs}
 
 // ---- Insert helpers ------------------------------------------------------------
 
+/** Gamaka suffix on a swara token (must stay glued — `r~`, not `r ~`). */
+const GAMAKA_MARK_RE = /^(?:\^|\/\/|\/|\\\\|\\|~~|~|=|\([^)]*\))$/;
+const SWARA_WITH_GAMAKA_RE =
+  /^([srgmpdn][ai]?)(['`]?)(\*?)(?:\^|\/\/|\/|\\\\|\\|~~|~|=|\([^)]*\))?(-*)$/i;
+
 function insertAtCursor(text: string): void {
   const start = sourceInput.selectionStart ?? sourceInput.value.length;
   const end = sourceInput.selectionEnd ?? start;
@@ -712,10 +772,81 @@ function insertAtCursor(text: string): void {
   scheduleRender();
 }
 
+function replaceRange(from: number, to: number, text: string, selectEnd = true): void {
+  const before = sourceInput.value.slice(0, from);
+  const after = sourceInput.value.slice(to);
+  sourceInput.value = before + text + after;
+  const caret = selectEnd ? from + text.length : from;
+  sourceInput.focus();
+  sourceInput.setSelectionRange(caret, caret);
+  markDirty();
+  scheduleRender();
+}
+
+/** Attach / replace a gamaka mark on an existing swara token. */
+function attachGamakaToToken(tok: string, mark: string): string | null {
+  if (!GAMAKA_MARK_RE.test(mark)) return null;
+  const m = SWARA_WITH_GAMAKA_RE.exec(tok);
+  if (!m) return null;
+  return `${m[1]}${m[2] ?? ""}${m[3] ?? ""}${mark}${m[4] ?? ""}`;
+}
+
+/**
+ * Insert a single-note gamaka. Prefers the current selection or the swara token
+ * immediately left of the caret so the mark stays glued (`g/`, `r~`, `m(sp)`).
+ */
+function insertGamakaMark(mark: string): void {
+  const start = sourceInput.selectionStart ?? 0;
+  const end = sourceInput.selectionEnd ?? start;
+  const value = sourceInput.value;
+
+  if (start !== end) {
+    const sel = value.slice(start, end).trim();
+    const attached = attachGamakaToToken(sel, mark);
+    if (attached != null) {
+      // Expand trim: replace only the trimmed token inside the selection.
+      const lead = value.slice(start, end).indexOf(sel);
+      replaceRange(start + lead, start + lead + sel.length, attached);
+      setStatusOk(`Gamaka → ${attached}`);
+      return;
+    }
+  }
+
+  const before = value.slice(0, start);
+  const leftTok = /([^\s]+)$/.exec(before);
+  if (leftTok) {
+    const tok = leftTok[1]!;
+    const attached = attachGamakaToToken(tok, mark);
+    if (attached != null) {
+      const tokStart = start - tok.length;
+      replaceRange(tokStart, start, attached);
+      setStatusOk(`Gamaka → ${attached}`);
+      return;
+    }
+  }
+
+  insertAtCursor(mark);
+  setStatusOk("Gamaka mark needs a note — select a swara (e.g. r) or place the caret after it, then Insert → Gamaka");
+}
+
 function insertGamakaCluster(tag: string): void {
-  const selected = sourceInput.value.slice(sourceInput.selectionStart, sourceInput.selectionEnd);
-  if (selected.trim()) insertAtCursor(`{${selected}}(${tag})`);
-  else insertAtCursor(`{ }(${tag})`);
+  const start = sourceInput.selectionStart ?? 0;
+  const end = sourceInput.selectionEnd ?? start;
+  const selected = sourceInput.value.slice(start, end).trim();
+  if (selected) {
+    insertAtCursor(`{ ${selected} }(${tag})`);
+    setStatusOk(`Gamaka cluster { … }(${tag})`);
+  } else {
+    // Non-empty placeholder — empty { }(tag) is a parse error.
+    const stub = `{ s r g }(${tag})`;
+    insertAtCursor(stub);
+    // Select the notes so the user can type over them immediately.
+    const caret = sourceInput.selectionStart ?? 0;
+    const notesStart = caret - stub.length + 2; // after "{ "
+    const notesEnd = notesStart + 5; // "s r g"
+    sourceInput.setSelectionRange(notesStart, notesEnd);
+    setStatusOk(`Gamaka cluster (${tag}) — replace the selected notes, keep { }(${tag})`);
+  }
 }
 
 function promptAndInsert(title: string, template: (value: string) => string, initial = ""): void {
@@ -780,23 +911,23 @@ function buildAppMenus(): void {
   const mod = isMac ? "⌘" : "Ctrl+";
 
   const gamakaItems: MenuItem[] = [
-    { label: "Kampita (shake)  ~", action: () => insertAtCursor("~") },
-    { label: "Kampita (heavy)  ~~", action: () => insertAtCursor("~~") },
-    { label: "Slide up (etRa jAru)  /", action: () => insertAtCursor("/") },
-    { label: "Slide up, long  //", action: () => insertAtCursor("//") },
-    { label: "Slide down (iRakka jAru)  \\", action: () => insertAtCursor("\\") },
-    { label: "Slide down, long  \\\\", action: () => insertAtCursor("\\\\") },
-    { label: "Ravai  ^", action: () => insertAtCursor("^") },
-    { label: "Sustain  =", action: () => insertAtCursor("=") },
+    { label: "Kampita (shake)  ~", action: () => insertGamakaMark("~") },
+    { label: "Kampita (heavy)  ~~", action: () => insertGamakaMark("~~") },
+    { label: "Slide up (etRa jAru)  /", action: () => insertGamakaMark("/") },
+    { label: "Slide up, long  //", action: () => insertGamakaMark("//") },
+    { label: "Slide down (iRakka jAru)  \\", action: () => insertGamakaMark("\\") },
+    { label: "Slide down, long  \\\\", action: () => insertGamakaMark("\\\\") },
+    { label: "Ravai  ^", action: () => insertGamakaMark("^") },
+    { label: "Sustain  =", action: () => insertGamakaMark("=") },
     { separator: true },
-    { label: "Volume soft  (v1)", action: () => insertAtCursor("(v1)") },
-    { label: "Volume medium  (v2)", action: () => insertAtCursor("(v2)") },
-    { label: "Volume loud  (v3)", action: () => insertAtCursor("(v3)") },
+    { label: "Volume soft  (v1)", action: () => insertGamakaMark("(v1)") },
+    { label: "Volume medium  (v2)", action: () => insertGamakaMark("(v2)") },
+    { label: "Volume loud  (v3)", action: () => insertGamakaMark("(v3)") },
     { separator: true },
-    { label: "Sphurita  (sp)", action: () => insertAtCursor("(sp)") },
-    { label: "Pratyaghata  (pr)", action: () => insertAtCursor("(pr)") },
-    { label: "Nokku / tirupa  (w)", action: () => insertAtCursor("(w)") },
-    { label: "VaLi  (vl)", action: () => insertAtCursor("(vl)") },
+    { label: "Sphurita  (sp)", action: () => insertGamakaMark("(sp)") },
+    { label: "Pratyaghata  (pr)", action: () => insertGamakaMark("(pr)") },
+    { label: "Nokku / tirupa  (w)", action: () => insertGamakaMark("(w)") },
+    { label: "VaLi  (vl)", action: () => insertGamakaMark("(vl)") },
     { separator: true },
     { label: "Khandippu cluster  { }(kh)", action: () => insertGamakaCluster("kh") },
     { label: "Odukkal cluster  { }(od)", action: () => insertGamakaCluster("od") },
@@ -866,6 +997,15 @@ function buildAppMenus(): void {
           label: "Cycles Per Row…",
           action: () => promptAndInsert("Cycles per row (e.g. 1 or 2)", (v) => `CyclesPerRow: ${v}\n`, "1"),
         },
+        {
+          label: "Default Speed…",
+          action: () => {
+            const v = window.prompt("Notation base speed (0, 1, or 2)", defaultSpeedSelect.value || "0");
+            if (v == null || !/^[012]$/.test(v.trim())) return;
+            defaultSpeedSelect.value = v.trim();
+            applyDefaultSpeedFromUi();
+          },
+        },
         { separator: true },
         {
           label: "Heading…",
@@ -909,6 +1049,9 @@ playBtn.addEventListener("click", () => void playFromStart());
 stopBtn.addEventListener("click", stopPlay);
 speedSlider.addEventListener("input", () => {
   updateSpeedLabel();
+});
+defaultSpeedSelect.addEventListener("change", () => {
+  applyDefaultSpeedFromUi();
 });
 instrumentSelect.addEventListener("change", () => {
   const inst = INSTRUMENTS.find((i) => i.id === instrumentSelect.value);

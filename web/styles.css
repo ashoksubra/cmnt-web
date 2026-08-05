@@ -168,7 +168,8 @@ body {
   display: none;
 }
 
-.menu-submenu:hover > .menu-panel-sub {
+.menu-submenu:hover > .menu-panel-sub,
+.menu-submenu.open > .menu-panel-sub {
   display: block;
 }
 

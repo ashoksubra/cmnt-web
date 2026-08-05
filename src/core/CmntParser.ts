@@ -247,16 +247,22 @@ class Parser {
       r.ignore = true;
       return r;
     }
-    if (s === "," || s === "-" || s === "--" || s === ",-") {
+    // Bare dash rests (1 akshara). Trailing "-" on "," / ";" are phrase-end
+    // suffixes (older files use ";--" for a long karvai + phrase mark).
+    if (s === "-" || s === "--") {
       r.swara = new Swara(s, true, 0, 1, speed, null, 0);
+      return r;
+    }
+    if (/^,-*$/.test(s)) {
+      r.swara = new Swara(s, true, 0, 1, speed, null, Math.max(0, s.length - 1));
       return r;
     }
     if (s === "=") {
       r.swara = new Swara("..", false, 0, 1, 0, null, 0);
       return r;
     }
-    if (s === ";" || s === ";-") {
-      r.swara = new Swara(s, true, 0, 2, speed, null, 0);
+    if (/^;-*$/.test(s)) {
+      r.swara = new Swara(s, true, 0, 2, speed, null, Math.max(0, s.length - 1));
       return r;
     }
     if (s === "_") {

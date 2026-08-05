@@ -68,6 +68,9 @@ function closeAll(root: HTMLElement): void {
   for (const wrap of root.querySelectorAll(".menu-root")) {
     wrap.classList.remove("open");
   }
+  for (const sub of root.querySelectorAll(".menu-submenu.open")) {
+    sub.classList.remove("open");
+  }
 }
 
 function populatePanel(panel: HTMLElement, items: MenuItem[], onPick: () => void): void {
@@ -88,6 +91,15 @@ function populatePanel(panel: HTMLElement, items: MenuItem[], onPick: () => void
       const sub = document.createElement("div");
       sub.className = "menu-panel menu-panel-sub";
       populatePanel(sub, item.submenu, onPick);
+      // Click (not only hover) so Gamaka / nested menus work on trackpads & touch.
+      label.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const open = row.classList.contains("open");
+        for (const other of panel.querySelectorAll(".menu-submenu.open")) {
+          other.classList.remove("open");
+        }
+        if (!open) row.classList.add("open");
+      });
       row.append(label, sub);
       panel.appendChild(row);
       continue;

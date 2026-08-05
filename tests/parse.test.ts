@@ -66,4 +66,19 @@ describe("CmntParser", () => {
       expect((e as ParseException).line).toBe(2);
     }
   });
+
+  it("accepts ;-- and ,-- as karvai + phrase-end hyphens", () => {
+    const song = parse(
+      ["Tala: Adi", "DefaultSpeed: 0", "S: s ;-- r ,-- g m", "L: sa - ri - ga ma", ""].join("\n"),
+    );
+    const block = song.parts.find((p) => p instanceof SongBlock) as SongBlock;
+    const labels = block.notations.map((n) => n.swara.label);
+    expect(labels).toContain(";--");
+    expect(labels).toContain(",--");
+    const semi = block.notations.find((n) => n.swara.label === ";--")!.swara;
+    expect(semi.pause).toBe(true);
+    expect(semi.length).toBe(2);
+    expect(semi.phraseHyphens).toBe(2);
+    expect(semi.displayLabel()).toBe(";");
+  });
 });

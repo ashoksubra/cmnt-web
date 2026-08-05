@@ -62,12 +62,20 @@
         </div>
 
         <div class="playback-bar" title="Playback instrument and speed (applied on Play)">
+          <label class="field" title="Notation DefaultSpeed: 0/1/2. Inline ( ) / (( )) nest relative to this base.">
+            <span>Base speed</span>
+            <select id="default-speed-select" aria-label="Notation base speed (DefaultSpeed)">
+              <option value="0">0 — 1st</option>
+              <option value="1">1 — 2nd</option>
+              <option value="2">2 — 3rd</option>
+            </select>
+          </label>
           <label class="field">
             <span>Instrument</span>
             <select id="instrument-select"></select>
           </label>
-          <label class="field field-speed">
-            <span>Speed <em id="speed-label">1.0×</em></span>
+          <label class="field field-speed" title="Playback tempo multiplier (not DefaultSpeed)">
+            <span>Tempo <em id="speed-label">1.0×</em></span>
             <input
               id="speed-slider"
               type="range"
@@ -75,7 +83,7 @@
               max="2.5"
               step="0.05"
               value="1"
-              aria-label="Playback speed"
+              aria-label="Playback tempo"
             />
           </label>
           <button id="play-btn" type="button" class="secondary-btn" title="Play from start (⌘/Ctrl+P)">▶ Play</button>

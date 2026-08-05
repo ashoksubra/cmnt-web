@@ -299,7 +299,8 @@ export function layoutBlock(
     // that's the standard Carnatic meaning (a one-akshara/two-akshara karvai
     // sustains whatever was just sung/played). A bare "-"/"--" or an empty "_"/
     // "__" placeholder is a true rest.
-    const isKarvai = sw.pause && (sw.label === "," || sw.label === ",-" || sw.label === ";" || sw.label === ";-");
+    // "," / ";" with any number of trailing phrase hyphens (";--", ",-", …).
+    const isKarvai = sw.pause && (/^,-*$/.test(sw.label) || /^;-*$/.test(sw.label));
     const isRest = (sw.pause && !isKarvai) || sw.empty;
     const unit = new Swara("x", false, 0, 1, sw.speed, null, 0).duration(gati);
     // Unit for emitted karvai commas after an anga-boundary split.

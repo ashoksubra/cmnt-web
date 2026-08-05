@@ -33,15 +33,17 @@ export class Swara {
     if (label === "_" || label === "__") this.empty = true;
     const bareDash = label === "-" || label === "--";
     if (this.phraseHyphens <= 0 && label.endsWith("-") && !bareDash) {
-      this.phraseHyphens = 1;
+      const m = /(-+)$/.exec(label);
+      this.phraseHyphens = m != null ? m[1]!.length : 1;
     }
   }
 
   displayLabel(): string {
     if (this.empty) return "";
     const bareDash = this.label === "-" || this.label === "--";
+    // Strip phrase-end hyphens from notes and from pause tokens (",--", ";--").
     if (this.label.endsWith("-") && !bareDash) {
-      return this.label.slice(0, -1);
+      return this.label.replace(/-+$/, "");
     }
     return this.label;
   }
