@@ -219,7 +219,17 @@ export function roopakaChapu(gati: number, withInternal: boolean, layout: string
   return make("rUpaka (cApu)", 3, `RoopakaChapu-${gati}`, markerList, rows, layout);
 }
 
-/** Misra Chapu: 7 aksharas, traditional 3+4 anga split (clap at 0, clap at 3). */
+/**
+ * Chapu talas (special 35-tala variants): the cApu anga is always 3 counts
+ * (gesture: 3 accounted in the span of 2, one silent). Remaining angas make the
+ * jati total — Khanda 5, Misra 7, Sankirna 9. Viloma reverses the anga order.
+ *
+ *   Khanda  3|2     Viloma 2|3
+ *   Misra   3|4     Viloma 4|3   (second anga = 2+2 drutam feel, one bar)
+ *   Sankirna 3|2|4  Viloma 2|4|3
+ */
+
+/** Misra Chapu: 7 = cApu(3) + drutam(4). Markers 3|4. */
 export function misraChapu(layout: string | null): Tala {
   const g = Gati.CATUSRA;
   const markers: MarkerSpec[] = [
@@ -238,26 +248,25 @@ export function misraChapu(layout: string | null): Tala {
   return make("Misra Chapu", 7, "MisraChapu", markers, rows, layout);
 }
 
-/** Khanda Chapu: 5 aksharas, traditional 2+3 anga split (clap at 0, clap at 2). */
+/** Khanda Chapu: 5 = cApu(3) + 2. Markers 3|2. */
 export function khandaChapu(fourCycles: boolean, layout: string | null): Tala {
   const g = Gati.CATUSRA;
   const markers: MarkerSpec[] = [
     [0, g, 2],
-    [2, g, 1],
+    [3, g, 1],
   ];
   const cyclesPerRow = fourCycles ? 4 : 2;
   const segs: SegSpec[] = [];
   for (let i = 0; i < cyclesPerRow; i++) {
-    segs.push([1, 2, g]);
     segs.push([1, 3, g]);
+    segs.push([1, 2, g]);
   }
   const rows = [row(segs, 5 * cyclesPerRow)];
   const predef = fourCycles ? "KhandaChapu" : "KhandaChapu2";
   return make("Khanda Chapu", 5, predef, markers, rows, layout);
 }
 
-/** Viloma Misra Chapu: 7 aksharas, REVERSED anga split -- 4+3 instead of the
- *  standard 3+4 (clap at 0, clap at 4). */
+/** Viloma Misra Chapu: 7, reversed — 4|3. */
 export function vilomaMisraChapu(layout: string | null): Tala {
   const g = Gati.CATUSRA;
   const markers: MarkerSpec[] = [
@@ -276,23 +285,64 @@ export function vilomaMisraChapu(layout: string | null): Tala {
   return make("Viloma Misra Chapu", 7, "VilomaMisraChapu", markers, rows, layout);
 }
 
-/** Viloma Khanda Chapu: 5 aksharas, REVERSED anga split -- 3+2 instead of the
- *  standard 2+3 (clap at 0, clap at 3). */
+/** Viloma Khanda Chapu: 5, reversed — 2|3. */
 export function vilomaKhandaChapu(fourCycles: boolean, layout: string | null): Tala {
   const g = Gati.CATUSRA;
   const markers: MarkerSpec[] = [
     [0, g, 2],
-    [3, g, 1],
+    [2, g, 1],
   ];
   const cyclesPerRow = fourCycles ? 4 : 2;
   const segs: SegSpec[] = [];
   for (let i = 0; i < cyclesPerRow; i++) {
-    segs.push([1, 3, g]);
     segs.push([1, 2, g]);
+    segs.push([1, 3, g]);
   }
   const rows = [row(segs, 5 * cyclesPerRow)];
   const predef = fourCycles ? "VilomaKhandaChapu" : "VilomaKhandaChapu2";
   return make("Viloma Khanda Chapu", 5, predef, markers, rows, layout);
+}
+
+/** Sankirna Chapu: 9 = cApu(3) + 2 + 4. Markers 3|2|4. */
+export function sankirnaChapu(layout: string | null): Tala {
+  const g = Gati.CATUSRA;
+  const markers: MarkerSpec[] = [
+    [0, g, 2],
+    [3, g, 1],
+    [5, g, 1],
+  ];
+  const rows = [
+    row(
+      [
+        [1, 3, g],
+        [1, 2, g],
+        [1, 4, g],
+      ],
+      9,
+    ),
+  ];
+  return make("Sankirna Chapu", 9, "SankirnaChapu", markers, rows, layout);
+}
+
+/** Viloma Sankirna Chapu: 9, reversed — 2|4|3. */
+export function vilomaSankirnaChapu(layout: string | null): Tala {
+  const g = Gati.CATUSRA;
+  const markers: MarkerSpec[] = [
+    [0, g, 2],
+    [2, g, 1],
+    [6, g, 1],
+  ];
+  const rows = [
+    row(
+      [
+        [1, 2, g],
+        [1, 4, g],
+        [1, 3, g],
+      ],
+      9,
+    ),
+  ];
+  return make("Viloma Sankirna Chapu", 9, "VilomaSankirnaChapu", markers, rows, layout);
 }
 
 export function tisraTriputa(layout: string | null): Tala {
@@ -473,7 +523,14 @@ export function manualTala(layout: string | null): Tala {
 }
 
 function normalizeKey(name: string): string {
-  const key = name.trim().toLowerCase().replace(/ /g, "");
+  // Collapse spaces ("Misra Chapu"); keep underscores (Tisra_Adi) and hyphens (adi-2).
+  // English "chapu" (with h) → CMNT "capu".
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/chapu/g, "capu")
+    .replace(/_capu/g, "capu"); // misra_capu → misracapu (keep Tisra_Adi underscores)
   switch (key) {
     case "roopakacapu-2":
       return "roopakacapu2";
@@ -504,6 +561,24 @@ function normalizeKey(name: string): string {
   }
 }
 
+/**
+ * Chapu talas count TKT / TKDM (etc.) beats as aksharas. DefaultSpeed 0/1/2
+ * therefore means 1/2/4 notes per beat — same as Gitam — not the krithi-tier
+ * +2 shift (4/8/16 notes per suladi akshara).
+ */
+export function isChapuTala(tala: Tala | null | undefined): boolean {
+  if (tala == null) return false;
+  const p = tala.predefName.toLowerCase();
+  return p.includes("capu") || p.includes("chapu");
+}
+
+/** Extra speed octaves applied for krithi/varnam notation (0 for gitam & chapu). */
+export function notationSpeedShift(layout: string | null | undefined, tala: Tala | null | undefined): number {
+  if (layout != null && layout.toLowerCase() === "gitam") return 0;
+  if (isChapuTala(tala)) return 0;
+  return 2;
+}
+
 export function fromPredefinedName(name: string, layout: string | null): Tala | null {
   const layoutN = layout == null ? "krithi" : layout.toLowerCase();
   const key = normalizeKey(name);
@@ -520,6 +595,12 @@ export function fromPredefinedName(name: string, layout: string | null): Tala | 
       return vilomaKhandaChapu(true, layoutN);
     case "vilomakhandacapu2":
       return vilomaKhandaChapu(false, layoutN);
+    case "sankirnacapu":
+    case "sankeernacapu":
+      return sankirnaChapu(layoutN);
+    case "vilomasankirnacapu":
+    case "vilomasankeernacapu":
+      return vilomaSankirnaChapu(layoutN);
     case "triputa":
       return tisraTriputa(layoutN);
     case "khanda_triputa":
@@ -614,6 +695,8 @@ export const TALA_NAMES: readonly string[] = [
   "KhandaCapu2",
   "VilomaKhandaCapu",
   "VilomaKhandaCapu2",
+  "SankirnaCapu",
+  "VilomaSankirnaCapu",
   "Eka",
   "Tisra_Eka",
   "Khanda_Eka",

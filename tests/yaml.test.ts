@@ -74,5 +74,25 @@ describe("YamlFrontMatter.preprocess", () => {
     const rt = song.parts.find((p): p is Heading => p instanceof Heading && p.role === "ragamTalam");
     expect(rt?.language?.split(":")[0]).toBe("tamil");
   });
+
+  it("promotes TalamDisplay: misracApu to Tala: when tala: is missing", () => {
+    const text = [
+      "---",
+      "raga: kEdAram",
+      "TalamDisplay: misracApu",
+      "speed: 0",
+      "---",
+      "S: s r g m p d n",
+      "L: ta ki ta ta ka di mi",
+      "",
+    ].join("\n");
+    const out = preprocess(text);
+    expect(out).toContain("Tala: misracApu");
+    expect(out).not.toMatch(/^TalamDisplay:/m);
+    const song = parse(text);
+    expect(song.tala.aksharaCount).toBe(7);
+    expect(song.tala.predefName).toBe("MisraChapu");
+    expect(song.effectiveDefaultSpeed).toBe(0);
+  });
 });
 

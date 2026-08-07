@@ -130,10 +130,6 @@ class Parser {
   private notationPos: Fraction = Fraction.ZERO;
   private clusterStartIndex = -1; // index into `swaras` where an open {..} gamaka cluster began, or -1
 
-  private isGitamLayout(): boolean {
-    return (this.layout ?? "").toLowerCase() === "gitam";
-  }
-
   private commitBlock(): void {
     if (this.swaras.length === 0 || this.song === null) {
       this.swaras = [];
@@ -221,8 +217,9 @@ class Parser {
       // defaultSpeed stays the raw, user-facing value (what they typed, for UI
       // display); effectiveDefaultSpeed is the layout-shifted value actually used
       // for duration/speedLines calculations (see the S: line handling below).
+      // Chapu talas skip the krithi +2 shift — beats are TKT/TKDM aksharas.
       song.defaultSpeed = this.defSpeed;
-      song.effectiveDefaultSpeed = this.isGitamLayout() ? this.defSpeed : this.defSpeed + 2;
+      song.effectiveDefaultSpeed = this.defSpeed + Talas.notationSpeedShift(this.layout, tala);
       song.phraseEndsStyle = this.phraseEndsStyle;
       song.compact = this.compact;
       song.portrait = this.portrait;
@@ -351,6 +348,12 @@ class Parser {
             }
             this.curGati = tala.primaryGati();
             this.talaIsPlaceholder = false;
+            // Placeholder was Adi (suladi +2); chapu/gitam need the unshifted scale.
+            if (this.defSpeed !== null) {
+              this.song.defaultSpeed = this.defSpeed;
+              this.song.effectiveDefaultSpeed =
+                this.defSpeed + Talas.notationSpeedShift(this.layout, tala);
+            }
           }
           const angas = Talas.angaBreakdown(tala);
           this.pendingTalamClause = `Talam : ${tala.name}${angas !== null ? ` (${angas})` : ""}`;
@@ -368,7 +371,8 @@ class Parser {
             // seen, using a fallback value -- correct it now rather than silently
             // dropping the user's actual DefaultSpeed:.
             this.song.defaultSpeed = this.defSpeed;
-            this.song.effectiveDefaultSpeed = this.isGitamLayout() ? this.defSpeed : this.defSpeed + 2;
+            this.song.effectiveDefaultSpeed =
+              this.defSpeed + Talas.notationSpeedShift(this.layout, this.song.tala);
           }
           continue;
         }
@@ -558,7 +562,7 @@ class Parser {
           // shift once here (rather than changing the duration formula itself)
           // means inline ( )/(( )) speed changes compound correctly on top of it.
           let baseSpeed = this.defSpeed !== null ? this.defSpeed : 1;
-          if (!this.isGitamLayout()) baseSpeed += 2;
+          baseSpeed += Talas.notationSpeedShift(this.layout, song.tala);
           let speed = baseSpeed;
           this.lastSwaraLineCount = 0;
           this.lyricLineIndex = 0;

@@ -34,6 +34,8 @@
  * this only activates when the very first non-blank line is exactly "---".
  */
 
+import { fromPredefinedName } from "./Talas.js";
+
 /** Thrown for malformed front-matter (unrecognized keys, missing "text:", ...).
  *  `CmntParser.parse` catches this and rethrows as a `ParseException`. */
 export class YamlFrontMatterError extends Error {
@@ -376,10 +378,30 @@ function translate(raw: YamlMap): string[] {
   const ragaDisplay = firstNonNull(str(m.ragadisplay), str(m.ragamdisplay), str(m.raagamdisplay));
   if (ragaDisplay !== null) out.push(`RaagamDisplay: ${ragaDisplay}`);
 
-  const tala = firstNonNull(str(m.tala), str(m.talam));
-  if (tala !== null) out.push(`Tala: ${tala}`);
+  let tala = firstNonNull(str(m.tala), str(m.talam));
   const talaDisplay = firstNonNull(str(m.taladisplay), str(m.talamdisplay));
-  if (talaDisplay !== null) out.push(`TalamDisplay: ${talaDisplay}`);
+  // Common mistake: putting the tala name under TalamDisplay: only.
+  // TalamDisplay: is optional roman spelling; tala:/talam: selects the cycle.
+  // If the display value is itself a known predefined tala, promote it.
+  if (tala === null && talaDisplay !== null) {
+    if (fromPredefinedName(talaDisplay, null) != null) {
+      tala = talaDisplay;
+    } else {
+      throw new YamlFrontMatterError(
+        `TalamDisplay: "${talaDisplay}" is set but tala: is missing — ` +
+          `use tala: MisraCapu (or tala: misracApu) to select the tala; ` +
+          `TalamDisplay: is only for an optional roman spelling override`,
+      );
+    }
+  }
+  if (tala !== null) out.push(`Tala: ${tala}`);
+  // Only keep TalamDisplay when it is a spelling override, not the tala key itself.
+  if (
+    talaDisplay !== null &&
+    (tala === null || talaDisplay.trim().toLowerCase() !== tala.trim().toLowerCase())
+  ) {
+    out.push(`TalamDisplay: ${talaDisplay}`);
+  }
   const speed = firstNonNull(str(m.speed), str(m.defaultspeed));
   if (speed !== null) out.push(`DefaultSpeed: ${speed}`);
   const speedMarks = str(m.speedmarks);
