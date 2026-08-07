@@ -59,17 +59,20 @@ export function buildMenubar(
 }
 
 function closeAll(root: HTMLElement): void {
-  for (const panel of root.querySelectorAll<HTMLElement>(".menu-panel")) {
-    panel.hidden = true;
+  // Only top-level panels — do not stamp [hidden] onto nested accordion bodies
+  // (that attribute overrides CSS and permanently kills Gamaka / submenus).
+  for (const wrap of root.querySelectorAll(".menu-root")) {
+    const panel = wrap.querySelector<HTMLElement>(":scope > .menu-panel");
+    if (panel) panel.hidden = true;
+    wrap.classList.remove("open");
   }
   for (const btn of root.querySelectorAll<HTMLButtonElement>(".menu-button")) {
     btn.setAttribute("aria-expanded", "false");
   }
-  for (const wrap of root.querySelectorAll(".menu-root")) {
-    wrap.classList.remove("open");
-  }
   for (const sub of root.querySelectorAll(".menu-submenu.open")) {
     sub.classList.remove("open");
+    const body = sub.querySelector<HTMLElement>(".menu-accordion");
+    if (body) body.hidden = true;
   }
 }
 
@@ -82,23 +85,32 @@ function populatePanel(panel: HTMLElement, items: MenuItem[], onPick: () => void
       continue;
     }
     if ("submenu" in item) {
+      // Accordion (not a side flyout): parent panels use overflow-y:auto which
+      // clips absolutely-positioned flyouts, so Gamaka never appeared.
       const row = document.createElement("div");
       row.className = "menu-submenu";
       const label = document.createElement("button");
       label.type = "button";
       label.className = "menu-item menu-item-parent";
-      label.innerHTML = `<span>${escapeHtml(item.label)}</span><span class="menu-caret">▸</span>`;
+      label.setAttribute("aria-expanded", "false");
+      label.innerHTML = `<span>${escapeHtml(item.label)}</span><span class="menu-caret">▾</span>`;
       const sub = document.createElement("div");
-      sub.className = "menu-panel menu-panel-sub";
+      sub.className = "menu-accordion";
+      sub.hidden = true;
       populatePanel(sub, item.submenu, onPick);
-      // Click (not only hover) so Gamaka / nested menus work on trackpads & touch.
       label.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        const open = row.classList.contains("open");
-        for (const other of panel.querySelectorAll(".menu-submenu.open")) {
+        const open = !sub.hidden;
+        for (const other of panel.querySelectorAll<HTMLElement>(".menu-submenu.open")) {
+          if (other === row) continue;
           other.classList.remove("open");
+          const b = other.querySelector<HTMLElement>(".menu-accordion");
+          if (b) b.hidden = true;
+          other.querySelector(".menu-item-parent")?.setAttribute("aria-expanded", "false");
         }
-        if (!open) row.classList.add("open");
+        sub.hidden = open;
+        row.classList.toggle("open", !open);
+        label.setAttribute("aria-expanded", open ? "false" : "true");
       });
       row.append(label, sub);
       panel.appendChild(row);

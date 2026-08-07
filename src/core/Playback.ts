@@ -25,7 +25,9 @@ const ARO_TOKEN = /([RGMDNrgmdn])([123])/g;
 const VOLUME_TAG = /v([123])/i;
 
 const TONIC_MIDI = 60;
-const SECONDS_PER_AKSHARA = 0.55; // ~BASE_BPM 60 feel
+/** Reference duration when BPM = 60 (1 akshara = 1 beat = 1 second). */
+export const DEFAULT_BPM = 60;
+const SECONDS_PER_AKSHARA_AT_60 = 60 / DEFAULT_BPM; // 1.0
 const LEVEL_GAIN = [0, 0.18, 0.32, 0.48] as const;
 
 export type PlannedNote = {
@@ -85,7 +87,11 @@ function semitoneMapForSong(song: Song): Map<string, number> {
 }
 
 /** Plan timed notes from a song (layout → swara cells). Pure; no audio. */
-export function planNotes(song: Song, items?: LayoutItem[]): PlannedNote[] {
+export function planNotes(
+  song: Song,
+  items?: LayoutItem[],
+  secondsPerAkshara: number = SECONDS_PER_AKSHARA_AT_60,
+): PlannedNote[] {
   const semitones = semitoneMapForSong(song);
   const layout = items ?? layoutSong(song);
   const notes: PlannedNote[] = [];
@@ -93,12 +99,13 @@ export function planNotes(song: Song, items?: LayoutItem[]): PlannedNote[] {
   let open: PlannedNote | null = null;
   let level = 2;
   let prevMidi: number | null = null;
+  const beat = Math.max(0.05, secondsPerAkshara);
 
   for (const it of layout) {
     if (!(it instanceof VisualRow)) continue;
     for (const c of it.cells) {
       if (c.kind !== "swara") continue;
-      const dur = Math.max(c.duration.doubleValue(), 0) * SECONDS_PER_AKSHARA;
+      const dur = Math.max(c.duration.doubleValue(), 0) * beat;
       if (dur <= 0) continue;
 
       if (c.isRest) {
@@ -253,15 +260,31 @@ export function instrumentById(id: string | null | undefined): Instrument {
 
 export type PlaySongOptions = {
   /**
-   * Playback speed multiplier. 1 = default tempo, 2 = twice as fast,
-   * 0.5 = half speed. Clamped to a sensible UI range.
+   * Beats per minute. 1 akshara = 1 beat. Default {@link DEFAULT_BPM} (60).
+   * Independent of notation DefaultSpeed: 0/1/2 (which only changes note density).
+   */
+  bpm?: number;
+  /**
+   * When true, schedule an audible metronome click on each akshara beat.
+   * Silent when false/omitted.
+   */
+  click?: boolean;
+  /**
+   * Extra practice multiplier on top of BPM (1 = as written, 0.5 = half).
+   * Clamped to a sensible UI range.
    */
   speed?: number;
   /** Instrument voice (default Shehnai). */
   instrument?: InstrumentId | string;
 };
 
-/** Clamp UI speed slider values into a safe playback range. */
+/** Clamp UI BPM into a practical singing/practice range. */
+export function clampBpm(bpm: number): number {
+  if (!Number.isFinite(bpm)) return DEFAULT_BPM;
+  return Math.min(240, Math.max(20, Math.round(bpm)));
+}
+
+/** Clamp UI practice-speed slider values into a safe playback range. */
 export function clampPlaybackSpeed(speed: number): number {
   if (!Number.isFinite(speed)) return 1;
   return Math.min(2.5, Math.max(0.4, speed));
@@ -281,6 +304,27 @@ export function stopPlayback(): void {
 }
 
 type Stoppable = { stop: (when?: number) => void };
+
+function scheduleMetronomeClick(
+  ctx: AudioContext,
+  master: AudioNode,
+  when: number,
+  accent: boolean,
+  stoppables: Stoppable[],
+): void {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = "square";
+  osc.frequency.value = accent ? 1200 : 900;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.22 : 0.12, when + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+  osc.connect(g);
+  g.connect(master);
+  osc.start(when);
+  osc.stop(when + 0.05);
+  stoppables.push(osc);
+}
 
 function scheduleNoteVoice(
   ctx: AudioContext,
@@ -360,13 +404,11 @@ export async function playSong(song: Song, opts: PlaySongOptions = {}): Promise<
   const ctx = new AudioCtx();
   if (ctx.state === "suspended") await ctx.resume();
 
-  const speed = clampPlaybackSpeed(opts.speed ?? 1);
+  const bpm = clampBpm(opts.bpm ?? DEFAULT_BPM);
+  const practice = clampPlaybackSpeed(opts.speed ?? 1);
+  const secondsPerAkshara = (60 / bpm) / practice;
   const instrument = instrumentById(opts.instrument);
-  const notes = planNotes(song).map((n) => ({
-    ...n,
-    startSec: n.startSec / speed,
-    endSec: n.endSec / speed,
-  }));
+  const notes = planNotes(song, undefined, secondsPerAkshara);
 
   const master = ctx.createGain();
   master.gain.value = 0.8;
@@ -377,6 +419,20 @@ export async function playSong(song: Song, opts: PlaySongOptions = {}): Promise<
 
   for (const n of notes) {
     scheduleNoteVoice(ctx, master, instrument, n, startAt, stoppables);
+  }
+
+  const totalSec = notes.length === 0 ? 0 : Math.max(...notes.map((n) => n.endSec));
+  if (opts.click && totalSec > 0) {
+    const clickGain = ctx.createGain();
+    clickGain.gain.value = 0.7;
+    clickGain.connect(master);
+    const beat = secondsPerAkshara;
+    const nBeats = Math.ceil(totalSec / beat - 1e-9) + 1;
+    for (let i = 0; i < nBeats; i++) {
+      const t = i * beat;
+      if (t > totalSec + 0.001) break;
+      scheduleMetronomeClick(ctx, clickGain, startAt + t, i % 4 === 0, stoppables);
+    }
   }
 
   let playing = true;
@@ -400,7 +456,7 @@ export async function playSong(song: Song, opts: PlaySongOptions = {}): Promise<
   };
   activeHandle = handle;
 
-  const totalMs = notes.length === 0 ? 0 : Math.max(...notes.map((n) => n.endSec)) * 1000 + 80;
+  const totalMs = totalSec * 1000 + 80;
   if (totalMs > 0) {
     setTimeout(() => {
       if (activeHandle === handle) handle.stop();

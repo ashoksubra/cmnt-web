@@ -5,6 +5,8 @@ import {
   parseDynMark,
   extractRagaMapping,
   clampPlaybackSpeed,
+  clampBpm,
+  DEFAULT_BPM,
   INSTRUMENTS,
   instrumentById,
 } from "@cmnt/core/Playback";
@@ -75,5 +77,27 @@ describe("instruments and speed", () => {
     expect(clampPlaybackSpeed(1)).toBe(1);
     expect(clampPlaybackSpeed(0.1)).toBe(0.4);
     expect(clampPlaybackSpeed(9)).toBe(2.5);
+  });
+
+  it("scales note timing from BPM (1 akshara = 1 beat)", () => {
+    // Layout: Gitam keeps DefaultSpeed 0 as 1 note/akshara (no krithi +2 shift).
+    const song = parse(
+      [
+        "Layout: Gitam",
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: English",
+        "S: s r",
+        "L: sa ri",
+        "",
+      ].join("\n"),
+    );
+    const at60 = planNotes(song, undefined, 60 / DEFAULT_BPM);
+    const at120 = planNotes(song, undefined, 60 / 120);
+    expect(at60[0]!.endSec - at60[0]!.startSec).toBeCloseTo(1, 5);
+    expect(at120[0]!.endSec - at120[0]!.startSec).toBeCloseTo(0.5, 5);
+    expect(clampBpm(12)).toBe(20);
+    expect(clampBpm(300)).toBe(240);
+    expect(clampBpm(72.4)).toBe(72);
   });
 });

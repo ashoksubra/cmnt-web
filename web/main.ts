@@ -21,6 +21,7 @@ import {
 import { TALA_NAMES } from "@cmnt/core/Talas";
 import {
   INSTRUMENTS,
+  clampBpm,
   clampPlaybackSpeed,
   playSong,
   stopPlayback,
@@ -72,32 +73,84 @@ const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
 const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrument-select")!;
-const defaultSpeedSelect = document.querySelector<HTMLSelectElement>("#default-speed-select")!;
+const bpmInput = document.querySelector<HTMLInputElement>("#bpm-input")!;
+const clickToggle = document.querySelector<HTMLInputElement>("#click-toggle")!;
 const speedSlider = document.querySelector<HTMLInputElement>("#speed-slider")!;
 const speedLabel = document.querySelector<HTMLElement>("#speed-label")!;
 const playBtn = document.querySelector<HTMLButtonElement>("#play-btn")!;
 const stopBtn = document.querySelector<HTMLButtonElement>("#stop-btn")!;
 const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!;
-const talamDisplay = document.querySelector<HTMLInputElement>("#talam-display")!;
+const talamDisplay = document.querySelector<HTMLElement>("#talam-display")!;
 const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
 const saveHeadersBtn = document.querySelector<HTMLButtonElement>("#save-headers-btn")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
+const composerEl = document.querySelector<HTMLElement>(".composer")!;
+const paneSplitter = document.querySelector<HTMLElement>("#pane-splitter")!;
+const syntaxHelp = document.querySelector<HTMLElement>("#syntax-help")!;
+const syntaxHelpTitle = document.querySelector<HTMLElement>("#syntax-help-title")!;
+const syntaxHelpBody = document.querySelector<HTMLPreElement>("#syntax-help-body")!;
+const syntaxHelpDismiss = document.querySelector<HTMLButtonElement>("#syntax-help-dismiss")!;
 
 let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
-/** Once the user edits a name field, keep their text until Reset / fixture change. */
+/** Once the user edits the ragam field, keep their text until Clear / fixture change. */
 let ragamNameDirty = false;
-let talamNameDirty = false;
-/** True while the Base speed dropdown is driving a source rewrite (avoid feedback). */
-let defaultSpeedApplying = false;
-/** Last roman display spellings loaded from the parsed song (RaagamDisplay:/TalamDisplay:). */
+/** Last roman display spelling loaded from the parsed song (RaagamDisplay:). */
 let loadedRagaRoman = "";
-let loadedTalaRoman = "";
 let playbackHandle: PlaybackHandle | null = null;
+/** Session-only: user hid the YAML syntax tip. */
+let syntaxHelpDismissed = false;
+
+const YAML_SYNTAX_HELP = [
+  "Optional header: start and end with --- on its own line.",
+  "Keys are lowercase (raga: not Raagam:).",
+  "",
+  "---",
+  "title: Song title",
+  "composer: Composer",
+  "raga: Sri              # also: ragam / raagam",
+  "tala: Adi              # also: talam (catalogue name)",
+  "speed: 0               # DefaultSpeed 0 / 1 / 2",
+  "language: Tamil",
+  "layout:",
+  "  type: krithi         # krithi | gitam | …",
+  "  width: full          # full | compact",
+  "style:",
+  "  swara: { color: blue, size: 13 }",
+  "  lyric: { color: black, size: 13 }",
+  "---",
+  "",
+  "Then classic body lines:",
+  "Pallavi:",
+  "S: s r g m",
+  "L: sa ri ga ma",
+].join("\n");
+
+const CLASSIC_SYNTAX_HELP = [
+  "Classic CMNT directives (one per line), then swara/lyric rows:",
+  "",
+  "Language: English",
+  "Raagam: Mayamalavagowla",
+  "Tala: Adi",
+  "DefaultSpeed: 0",
+  "",
+  "S: s r g m | p d n s'",
+  "L: sa ri ga ma pa da ni sa",
+  "",
+  "Tip: start with --- for optional YAML front matter (keys lowercase).",
+].join("\n");
 
 function currentPlaybackSpeed(): number {
   return clampPlaybackSpeed(Number.parseFloat(speedSlider.value) || 1);
+}
+
+function currentBpm(): number {
+  return clampBpm(Number.parseFloat(bpmInput.value) || 60);
+}
+
+function currentClickEnabled(): boolean {
+  return clickToggle.checked;
 }
 
 function currentInstrumentId(): InstrumentId {
@@ -172,6 +225,9 @@ function setDocument(text: string, fileName: string, handle: FileSystemFileHandl
   currentFileName = fileName.endsWith(".txt") || fileName.endsWith(".cmnt") ? fileName : `${fileName}.txt`;
   currentFileHandle = handle;
   markClean();
+  // Re-show YAML tip when opening a YAML song (session Hide still applies until then).
+  if (looksLikeYamlFrontMatter(text)) syntaxHelpDismissed = false;
+  updateSyntaxHelp();
   render();
 }
 
@@ -179,17 +235,154 @@ function baseName(): string {
   return currentFileName.replace(/\.(txt|cmnt)$/i, "") || "score";
 }
 
-/** Selects the given 1-indexed source line in the textarea and scrolls it into view. */
-function selectSourceLine(lineNo: number): void {
+/**
+ * Scrolls a source line into view. Only selects the whole line when `force`
+ * is true — live parse while typing must not steal the caret (that wiped the line).
+ */
+function selectSourceLine(lineNo: number, opts: { force?: boolean } = {}): void {
   const lines = sourceInput.value.split("\n");
   if (lineNo < 1 || lineNo > lines.length) return;
   let start = 0;
   for (let i = 0; i < lineNo - 1; i++) start += lines[i]!.length + 1;
   const end = start + lines[lineNo - 1]!.length;
+  const lineHeight = parseFloat(getComputedStyle(sourceInput).lineHeight) || 20;
+  const scrollTop = Math.max(0, (lineNo - 4) * lineHeight);
+  const typingInSource = document.activeElement === sourceInput && !opts.force;
+  if (typingInSource) {
+    sourceInput.scrollTop = scrollTop;
+    return;
+  }
   sourceInput.focus();
   sourceInput.setSelectionRange(start, end);
-  const lineHeight = parseFloat(getComputedStyle(sourceInput).lineHeight) || 20;
-  sourceInput.scrollTop = Math.max(0, (lineNo - 4) * lineHeight);
+  sourceInput.scrollTop = scrollTop;
+}
+
+function looksLikeYamlFrontMatter(text: string): boolean {
+  const lines = text.split("\n");
+  let i = 0;
+  while (i < lines.length && lines[i]!.trim() === "") i++;
+  if (i >= lines.length) return false;
+  const first = lines[i]!.trim();
+  // Show help as soon as the user starts a --- fence (including partial "-"/"--").
+  return first === "-" || first === "--" || first.startsWith("---");
+}
+
+function updateSyntaxHelp(): void {
+  if (syntaxHelpDismissed) {
+    syntaxHelp.hidden = true;
+    return;
+  }
+  const text = sourceInput.value;
+  if (looksLikeYamlFrontMatter(text)) {
+    syntaxHelp.hidden = false;
+    syntaxHelpTitle.textContent = "YAML front matter — keys & shape";
+    syntaxHelpBody.textContent = YAML_SYNTAX_HELP;
+    return;
+  }
+  // Empty / new-song buffer: clarify classic shape (and that --- opens YAML).
+  const trimmed = text.trim();
+  if (trimmed === "" || trimmed === NEW_SONG_TEMPLATE.trim()) {
+    syntaxHelp.hidden = false;
+    syntaxHelpTitle.textContent = "CMNT source syntax";
+    syntaxHelpBody.textContent = CLASSIC_SYNTAX_HELP;
+    return;
+  }
+  syntaxHelp.hidden = true;
+}
+
+const EDITOR_SIZE_KEY = "cmnt.editorPaneSize";
+
+function isStackedLayout(): boolean {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function applyStoredEditorSize(): void {
+  try {
+    const raw = localStorage.getItem(EDITOR_SIZE_KEY);
+    if (raw == null) return;
+    const n = Number.parseFloat(raw);
+    if (!Number.isFinite(n) || n < 160) return;
+    composerEl.style.setProperty("--editor-size", `${Math.round(n)}px`);
+  } catch {
+    /* ignore */
+  }
+}
+
+function initPaneSplitter(): void {
+  applyStoredEditorSize();
+  let dragging = false;
+
+  const onPointerMove = (ev: PointerEvent): void => {
+    if (!dragging) return;
+    const rect = composerEl.getBoundingClientRect();
+    const stacked = isStackedLayout();
+    const minEditor = stacked ? 160 : 260;
+    const minPreview = stacked ? 120 : 200;
+    const splitter = 6;
+    let size: number;
+    if (stacked) {
+      size = ev.clientY - rect.top;
+      size = Math.max(minEditor, Math.min(rect.height - minPreview - splitter, size));
+    } else {
+      size = ev.clientX - rect.left;
+      size = Math.max(minEditor, Math.min(rect.width - minPreview - splitter, size));
+    }
+    composerEl.style.setProperty("--editor-size", `${Math.round(size)}px`);
+  };
+
+  const endDrag = (ev: PointerEvent): void => {
+    if (!dragging) return;
+    dragging = false;
+    composerEl.classList.remove("resizing-panes");
+    try {
+      paneSplitter.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+    const cur = getComputedStyle(composerEl).getPropertyValue("--editor-size").trim();
+    const n = Number.parseFloat(cur);
+    if (Number.isFinite(n)) {
+      try {
+        localStorage.setItem(EDITOR_SIZE_KEY, String(Math.round(n)));
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  paneSplitter.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    dragging = true;
+    composerEl.classList.add("resizing-panes");
+    paneSplitter.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  paneSplitter.addEventListener("pointermove", onPointerMove);
+  paneSplitter.addEventListener("pointerup", endDrag);
+  paneSplitter.addEventListener("pointercancel", endDrag);
+  paneSplitter.addEventListener("keydown", (ev) => {
+    const step = ev.shiftKey ? 40 : 16;
+    const stacked = isStackedLayout();
+    const cur = Number.parseFloat(getComputedStyle(composerEl).getPropertyValue("--editor-size")) || (stacked ? 280 : 420);
+    let next = cur;
+    if (stacked) {
+      if (ev.key === "ArrowUp") next = cur - step;
+      else if (ev.key === "ArrowDown") next = cur + step;
+      else return;
+    } else {
+      if (ev.key === "ArrowLeft") next = cur - step;
+      else if (ev.key === "ArrowRight") next = cur + step;
+      else return;
+    }
+    ev.preventDefault();
+    next = Math.max(stacked ? 160 : 260, next);
+    composerEl.style.setProperty("--editor-size", `${Math.round(next)}px`);
+    try {
+      localStorage.setItem(EDITOR_SIZE_KEY, String(Math.round(next)));
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 function populateSchoolSelect(): void {
@@ -247,47 +440,38 @@ function syncHeaderFields(items: LayoutItem[]): void {
   const parts = h != null ? parseRagamTalamHeading(h.text) : null;
   if (parts == null) {
     if (!ragamNameDirty) ragamDisplay.value = "";
-    if (!talamNameDirty) talamDisplay.value = "";
     loadedRagaRoman = "";
-    loadedTalaRoman = "";
     ragamDisplay.disabled = true;
-    talamDisplay.disabled = true;
+    talamDisplay.textContent = "—";
     return;
   }
   ragamDisplay.disabled = parts.ragaName == null;
-  talamDisplay.disabled = parts.talaName == null;
   loadedRagaRoman = h?.ragaDisplayRoman ?? "";
-  loadedTalaRoman = h?.talaDisplayRoman ?? "";
-  // Fields edit CMNT-roman display spellings (persisted), not the on-score glyphs.
+  // Ragam field edits optional CMNT-roman display spelling (persisted).
   if (!ragamNameDirty) ragamDisplay.value = loadedRagaRoman;
-  if (!talamNameDirty) talamDisplay.value = loadedTalaRoman;
-  // Keep placeholders informative with the catalogue name.
   ragamDisplay.placeholder =
     parts.ragaName != null ? `optional CMNT spelling (catalogue: ${parts.ragaName})` : "optional CMNT spelling";
-  talamDisplay.placeholder =
-    parts.talaName != null ? `optional CMNT spelling (catalogue: ${parts.talaName})` : "optional CMNT spelling";
+  // Talam is catalogue-only — show name, no custom save UI.
+  talamDisplay.textContent = parts.talaName ?? "—";
 }
 
 function clearHeaderOverrides(): void {
   ragamNameDirty = false;
-  talamNameDirty = false;
 }
 
 function applyDisplayNamesToSource(clear = false): void {
   const raga = clear ? "" : ragamDisplay.value.trim();
-  const tala = clear ? "" : talamDisplay.value.trim();
+  // Only RaagamDisplay: is written; talam stays on the fixed catalogue (Tala:).
   sourceInput.value = upsertDisplayDirectives(sourceInput.value, {
     ragaRoman: raga,
-    talaRoman: tala,
   });
   ragamNameDirty = false;
-  talamNameDirty = false;
   markDirty();
   render();
   setStatusOk(
     clear
-      ? "Cleared RaagamDisplay:/TalamDisplay: from source — File → Save to keep"
-      : "Wrote display spellings into source — File → Save to keep",
+      ? "Cleared RaagamDisplay: from source — File → Save to keep"
+      : "Wrote RaagamDisplay: into source — File → Save to keep",
   );
 }
 
@@ -299,7 +483,6 @@ function renderScoreAtWidth(contentWidth: number): {
   svg: string;
   items: LayoutItem[];
   forceScript: Script | undefined;
-  defaultSpeed: number;
 } {
   const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
   const song = parse(sourceInput.value);
@@ -319,20 +502,13 @@ function renderScoreAtWidth(contentWidth: number): {
     rowSpacingScale: currentSchool.density.rowSpacingScale,
     ragamTalamOverrides: {
       ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
-      talaRoman: talamNameDirty ? talamDisplay.value : loadedTalaRoman || undefined,
     },
     measureCellWidth,
   });
-  return { svg, items, forceScript, defaultSpeed: song.defaultSpeed ?? 0 };
+  return { svg, items, forceScript };
 }
 
-function syncDefaultSpeedField(n: number): void {
-  if (defaultSpeedApplying) return;
-  const v = String(Math.max(0, Math.min(2, Math.trunc(n))));
-  if (defaultSpeedSelect.value !== v) defaultSpeedSelect.value = v;
-}
-
-/** Insert or replace DefaultSpeed: in the source (notation base, not playback tempo). */
+/** Insert or replace DefaultSpeed: in the source (notation density 0/1/2 — not BPM). */
 function upsertDefaultSpeedDirective(source: string, n: number): string {
   const line = `DefaultSpeed: ${n}`;
   const lines = source.split("\n");
@@ -359,31 +535,28 @@ function upsertDefaultSpeedDirective(source: string, n: number): string {
   return lines.join("\n");
 }
 
-function applyDefaultSpeedFromUi(): void {
-  const n = Number.parseInt(defaultSpeedSelect.value, 10);
+function applyNotationDefaultSpeed(n: number): void {
   if (![0, 1, 2].includes(n)) return;
-  defaultSpeedApplying = true;
   sourceInput.value = upsertDefaultSpeedDirective(sourceInput.value, n);
   markDirty();
   render();
-  defaultSpeedApplying = false;
   setStatusOk(
-    `DefaultSpeed: ${n} — inline ( ) raises one level, (( )) two, relative to this base`,
+    `DefaultSpeed: ${n} (notation density) — BPM/click are separate playback controls`,
   );
 }
 
 function render(): void {
   try {
-    const { svg, items, forceScript, defaultSpeed } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
+    const { svg, items, forceScript } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
     syncHeaderFields(items);
-    syncDefaultSpeedField(defaultSpeed);
     scorePage.innerHTML = svg;
     applyLangFontClass(activeIndicScript(items, forceScript));
     setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Parse error: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
-      selectSourceLine(err.line);
+      // Live update while typing: scroll only — do not select the whole line.
+      selectSourceLine(err.line, { force: document.activeElement !== sourceInput });
     } else {
       const message = err instanceof Error ? err.message : String(err);
       setStatusError(`Error: ${message}`);
@@ -478,17 +651,14 @@ function saveTextDownload(fileName: string): void {
   setStatusOk(`Downloaded ${fileName}`);
 }
 
-/** Flush live roman display fields into source before File → Save / export. */
+/** Flush live ragam roman display into source before File → Save / export. */
 function flushDisplayNamesIfDirty(): void {
-  if (!ragamNameDirty && !talamNameDirty) return;
+  if (!ragamNameDirty) return;
   sourceInput.value = upsertDisplayDirectives(sourceInput.value, {
     ragaRoman: ragamDisplay.value.trim(),
-    talaRoman: talamDisplay.value.trim(),
   });
   ragamNameDirty = false;
-  talamNameDirty = false;
   loadedRagaRoman = ragamDisplay.value.trim();
-  loadedTalaRoman = talamDisplay.value.trim();
 }
 
 async function saveFile(forceSaveAs: boolean): Promise<void> {
@@ -662,7 +832,6 @@ function buildLetterPdfPages(): string[] | null {
         rowSpacingScale,
         ragamTalamOverrides: {
           ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
-          talaRoman: talamNameDirty ? talamDisplay.value : loadedTalaRoman || undefined,
         },
         measureCellWidth,
       });
@@ -885,15 +1054,18 @@ function sampleMenuItems(): MenuItem[] {
 async function playFromStart(): Promise<void> {
   try {
     const song = parse(sourceInput.value);
+    const bpm = currentBpm();
     const speed = currentPlaybackSpeed();
+    const click = currentClickEnabled();
     const instrument = currentInstrumentId();
-    playbackHandle = await playSong(song, { speed, instrument });
+    playbackHandle = await playSong(song, { bpm, speed, click, instrument });
     const instLabel = INSTRUMENTS.find((i) => i.id === instrument)?.label ?? instrument;
-    setStatusOk(`Playing ${instLabel} at ${speed.toFixed(2)}× — Stop to cancel`);
+    const clickNote = click ? ", click on" : ", click off";
+    setStatusOk(`Playing ${instLabel} @ ${bpm} BPM × ${speed.toFixed(2)}${clickNote} — Stop to cancel`);
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
-      selectSourceLine(err.line);
+      selectSourceLine(err.line, { force: true });
     } else {
       setStatusError(`Play failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -1000,10 +1172,12 @@ function buildAppMenus(): void {
         {
           label: "Default Speed…",
           action: () => {
-            const v = window.prompt("Notation base speed (0, 1, or 2)", defaultSpeedSelect.value || "0");
+            const v = window.prompt(
+              "Notation DefaultSpeed (0/1/2 — note density for ( ) nesting).\nBPM tempo is set in the playback bar.",
+              "0",
+            );
             if (v == null || !/^[012]$/.test(v.trim())) return;
-            defaultSpeedSelect.value = v.trim();
-            applyDefaultSpeedFromUi();
+            applyNotationDefaultSpeed(Number.parseInt(v.trim(), 10));
           },
         },
         { separator: true },
@@ -1050,8 +1224,12 @@ stopBtn.addEventListener("click", stopPlay);
 speedSlider.addEventListener("input", () => {
   updateSpeedLabel();
 });
-defaultSpeedSelect.addEventListener("change", () => {
-  applyDefaultSpeedFromUi();
+bpmInput.addEventListener("change", () => {
+  bpmInput.value = String(currentBpm());
+  setStatusOk(`BPM → ${currentBpm()}${currentClickEnabled() ? " (click on)" : ""}`);
+});
+clickToggle.addEventListener("change", () => {
+  setStatusOk(currentClickEnabled() ? `Click on @ ${currentBpm()} BPM` : "Click off (silent beat)");
 });
 instrumentSelect.addEventListener("change", () => {
   const inst = INSTRUMENTS.find((i) => i.id === instrumentSelect.value);
@@ -1061,18 +1239,19 @@ ragamDisplay.addEventListener("input", () => {
   ragamNameDirty = true;
   scheduleRender();
 });
-talamDisplay.addEventListener("input", () => {
-  talamNameDirty = true;
-  scheduleRender();
-});
 saveHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(false));
 resetHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(true));
+syntaxHelpDismiss.addEventListener("click", () => {
+  syntaxHelpDismissed = true;
+  syntaxHelp.hidden = true;
+});
 openFileInput.addEventListener("change", () => {
   const file = openFileInput.files?.[0];
   if (file) void openFileFromInput(file);
 });
 sourceInput.addEventListener("input", () => {
   markDirty();
+  updateSyntaxHelp();
   scheduleRender();
 });
 sourceInput.addEventListener("keydown", (ev) => {
@@ -1113,9 +1292,11 @@ window.addEventListener("beforeunload", (ev) => {
 populateSchoolSelect();
 populateInstrumentSelect();
 updateSpeedLabel();
+initPaneSplitter();
 buildAppMenus();
 updateDocTitle();
 sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
 currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;
 markClean();
+updateSyntaxHelp();
 applySchool(schoolSelect.value as SchoolId);

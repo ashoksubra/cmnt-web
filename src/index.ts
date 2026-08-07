@@ -88,7 +88,9 @@ export {
   extractRagaMapping,
   INSTRUMENTS,
   instrumentById,
+  clampBpm,
   clampPlaybackSpeed,
+  DEFAULT_BPM,
 } from "./core/Playback.js";
 export type { PlannedNote, DynMark, PlaybackHandle, Instrument, InstrumentId, PlaySongOptions } from "./core/Playback.js";
 export { defaultMeasureCellWidth } from "./render/SvgScore.js";

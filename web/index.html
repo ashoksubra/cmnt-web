@@ -62,20 +62,28 @@
         </div>
 
         <div class="playback-bar" title="Playback instrument and speed (applied on Play)">
-          <label class="field" title="Notation DefaultSpeed: 0/1/2. Inline ( ) / (( )) nest relative to this base.">
-            <span>Base speed</span>
-            <select id="default-speed-select" aria-label="Notation base speed (DefaultSpeed)">
-              <option value="0">0 — 1st</option>
-              <option value="1">1 — 2nd</option>
-              <option value="2">2 — 3rd</option>
-            </select>
+          <label class="field" title="Beats per minute (1 akshara = 1 beat). Notation DefaultSpeed 0/1/2 is separate — Insert → Default Speed…">
+            <span>BPM</span>
+            <input
+              id="bpm-input"
+              type="number"
+              min="20"
+              max="240"
+              step="1"
+              value="60"
+              aria-label="Tempo in BPM"
+            />
+          </label>
+          <label class="field field-checkbox" title="Audible metronome click on each akshara beat">
+            <input type="checkbox" id="click-toggle" />
+            <span>Click</span>
           </label>
           <label class="field">
             <span>Instrument</span>
             <select id="instrument-select"></select>
           </label>
-          <label class="field field-speed" title="Playback tempo multiplier (not DefaultSpeed)">
-            <span>Tempo <em id="speed-label">1.0×</em></span>
+          <label class="field field-speed" title="Practice multiplier on top of BPM (1× = as written)">
+            <span>Practice <em id="speed-label">1.0×</em></span>
             <input
               id="speed-slider"
               type="range"
@@ -83,14 +91,14 @@
               max="2.5"
               step="0.05"
               value="1"
-              aria-label="Playback tempo"
+              aria-label="Practice speed multiplier"
             />
           </label>
           <button id="play-btn" type="button" class="secondary-btn" title="Play from start (⌘/Ctrl+P)">▶ Play</button>
           <button id="stop-btn" type="button" class="secondary-btn" title="Stop (⌘/Ctrl+.)">■ Stop</button>
         </div>
 
-        <div class="header-overrides" title="Catalogue raga/tala names stay roman on Indic scores (safe). Optional CMNT-roman spellings (with @/#/~n) are saved as RaagamDisplay:/TalamDisplay: and transliterated.">
+        <div class="header-overrides" title="Catalogue names stay roman on Indic scores. Optional CMNT-roman ragam spelling (with @/#/~n) is saved as RaagamDisplay: and transliterated. Talam uses the fixed catalogue — no custom save.">
           <label class="field field-grow">
             <span>Raagam display (roman)</span>
             <input
@@ -101,35 +109,48 @@
               placeholder="optional CMNT spelling e.g. pUrNa@ncandrikA"
             />
           </label>
-          <label class="field field-grow">
-            <span>Taalam display (roman)</span>
-            <input
-              id="talam-display"
-              type="text"
-              spellcheck="false"
-              autocomplete="off"
-              placeholder="optional CMNT spelling e.g. rUpakam"
-            />
-          </label>
-          <button id="save-headers-btn" type="button" class="secondary-btn" title="Write RaagamDisplay:/TalamDisplay: into the source (persists on Save)">
-            Save names
+          <div class="field field-grow talam-readonly">
+            <span>Talam (catalogue)</span>
+            <div id="talam-display" class="talam-display-ro" aria-live="polite">—</div>
+          </div>
+          <button id="save-headers-btn" type="button" class="secondary-btn" title="Write RaagamDisplay: into the source (persists on File → Save)">
+            Save ragam
           </button>
-          <button id="reset-headers-btn" type="button" class="secondary-btn" title="Clear display spellings and remove directives from source">
-            Clear names
+          <button id="reset-headers-btn" type="button" class="secondary-btn" title="Clear RaagamDisplay: from source">
+            Clear ragam
           </button>
         </div>
 
-        <textarea
-          id="source-input"
-          class="source-input"
-          spellcheck="false"
-          autocapitalize="off"
-          autocomplete="off"
-          wrap="off"
-        ></textarea>
+        <div id="syntax-help" class="syntax-help" hidden>
+          <div class="syntax-help-header">
+            <strong id="syntax-help-title">YAML front matter</strong>
+            <button type="button" id="syntax-help-dismiss" class="syntax-help-dismiss" title="Hide for this session">Hide</button>
+          </div>
+          <pre id="syntax-help-body" class="syntax-help-body"></pre>
+        </div>
+
+        <div class="editor-scroll">
+          <textarea
+            id="source-input"
+            class="source-input"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            wrap="off"
+          ></textarea>
+        </div>
 
         <div id="status-line" class="status status-ok">Ready</div>
       </section>
+
+      <div
+        id="pane-splitter"
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize editor and preview"
+        tabindex="0"
+      ></div>
 
       <section class="preview-pane">
         <div class="preview-scroll">
