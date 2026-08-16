@@ -649,9 +649,11 @@ body {
   fill: var(--swara-color);
 }
 
-.cmnt-phrase-tick {
-  stroke: var(--swara-color);
-  stroke-width: 2;
+.cmnt-phrase-break {
+  fill: var(--swara-color);
+  font-family: var(--swara-font);
+  font-size: var(--swara-size);
+  font-weight: 700;
 }
 
 .cmnt-speed-beam {

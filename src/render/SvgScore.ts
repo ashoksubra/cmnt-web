@@ -617,9 +617,23 @@ function renderRow(
       }
 
       if (c.phraseEnd) {
-        const tickX = x + w - 4;
+        // Center the bold "-" halfway between this note and the next note
+        // (e.g. in "p- sA", midway between p and sA — not hugging sA).
+        let nextNoteX: number | null = null;
+        let scanX = x + w;
+        for (let j = i + 1; j < row.cells.length; j++) {
+          const n = row.cells[j]!;
+          const nw = widths[j]!;
+          if (n.kind === "swara" && n.text !== "") {
+            nextNoteX = scanX + notePad;
+            break;
+          }
+          scanX += nw;
+        }
+        const markX =
+          nextNoteX != null ? (noteX + nextNoteX) / 2 : x + w / 2;
         parts.push(
-          `<line class="cmnt-phrase-tick" x1="${fmt(tickX)}" y1="${fmt(baselineY - 4)}" x2="${fmt(tickX)}" y2="${fmt(baselineY + 4)}" />`,
+          `<text class="cmnt-phrase-break" x="${fmt(markX)}" y="${fmt(baselineY)}" text-anchor="middle">-</text>`,
         );
       }
 
