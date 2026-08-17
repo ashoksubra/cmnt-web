@@ -18,6 +18,12 @@ import {
   parseRagamTalamHeading,
   upsertDisplayDirectives,
 } from "@cmnt/core/RagamTalamDisplay";
+import {
+  applyCorrection,
+  decodeForEditing,
+  lookupAny,
+  melakartaName,
+} from "@cmnt/core/Ragas";
 import { TALA_NAMES } from "@cmnt/core/Talas";
 import {
   INSTRUMENTS,
@@ -83,6 +89,15 @@ const ragamDisplay = document.querySelector<HTMLInputElement>("#ragam-display")!
 const talamDisplay = document.querySelector<HTMLElement>("#talam-display")!;
 const resetHeadersBtn = document.querySelector<HTMLButtonElement>("#reset-headers-btn")!;
 const saveHeadersBtn = document.querySelector<HTMLButtonElement>("#save-headers-btn")!;
+const editRagaBtn = document.querySelector<HTMLButtonElement>("#edit-raga-btn")!;
+const editRagaDialog = document.querySelector<HTMLDialogElement>("#edit-raga-dialog")!;
+const editRagaForm = document.querySelector<HTMLFormElement>("#edit-raga-form")!;
+const editRagaName = document.querySelector<HTMLInputElement>("#edit-raga-name")!;
+const editRagaCurrent = document.querySelector<HTMLElement>("#edit-raga-current")!;
+const editRagaMel = document.querySelector<HTMLInputElement>("#edit-raga-mel")!;
+const editRagaAro = document.querySelector<HTMLInputElement>("#edit-raga-aro")!;
+const editRagaAva = document.querySelector<HTMLInputElement>("#edit-raga-ava")!;
+const editRagaDwija = document.querySelector<HTMLInputElement>("#edit-raga-dwija")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
@@ -1039,6 +1054,93 @@ function promptSubscript(sub: boolean): void {
   insertAtCursor(glyphs[Number(n)]!);
 }
 
+/** Catalogue raga from the current source (`Raagam:`), if any. */
+function currentCatalogueRagaName(): string {
+  const m = /^(?:Raagam|Ragam)\s*:\s*(.+)$/im.exec(sourceInput.value);
+  return m?.[1]?.trim() ?? "";
+}
+
+function fillEditRagaForm(name: string): void {
+  const trimmed = name.trim();
+  editRagaName.value = trimmed;
+  const current = lookupAny(trimmed);
+  if (current.kind === "MELAKARTA") {
+    editRagaCurrent.textContent =
+      `"${trimmed}" is melakarta ${current.melakarta} (${melakartaName(current.melakarta) ?? "?"}) — Aro/Ava is formula-fixed and cannot be edited.`;
+    editRagaMel.value = String(current.melakarta);
+    editRagaAro.value = "";
+    editRagaAva.value = "";
+    editRagaDwija.checked = false;
+    editRagaMel.disabled = true;
+    editRagaAro.disabled = true;
+    editRagaAva.disabled = true;
+    editRagaDwija.disabled = true;
+    return;
+  }
+  editRagaMel.disabled = false;
+  editRagaAro.disabled = false;
+  editRagaAva.disabled = false;
+  editRagaDwija.disabled = false;
+  if (current.kind === "UNKNOWN") {
+    editRagaCurrent.textContent =
+      "(not in the library — saving will add it as a new janya)";
+    editRagaMel.value = "";
+    editRagaAro.value = "";
+    editRagaAva.value = "";
+    editRagaDwija.checked = false;
+  } else {
+    const melLabel = melakartaName(current.melakarta) ?? "?";
+    editRagaCurrent.textContent =
+      `Current: Melakarta ${current.melakarta} (${melLabel})\n` +
+      `Aro: ${decodeForEditing(current.aro)}   Ava: ${decodeForEditing(current.ava)}` +
+      (current.kind === "DWIJA" ? "   [dwi-madhyama]" : "");
+    editRagaMel.value = String(current.melakarta);
+    editRagaAro.value = decodeForEditing(current.aro);
+    editRagaAva.value = decodeForEditing(current.ava);
+    editRagaDwija.checked = current.kind === "DWIJA";
+  }
+}
+
+function openEditRagaDialog(initialName?: string): void {
+  const fromArg = initialName?.trim() ?? "";
+  const fromSource = currentCatalogueRagaName();
+  const name = fromArg || fromSource || "Hamsadwani";
+  fillEditRagaForm(name);
+  if (typeof editRagaDialog.showModal === "function") {
+    editRagaDialog.showModal();
+  } else {
+    editRagaDialog.setAttribute("open", "");
+  }
+  editRagaName.focus();
+}
+
+function saveEditRagaFromForm(): boolean {
+  const name = editRagaName.value.trim();
+  if (name === "") {
+    setStatusError("Raga name can't be empty");
+    return false;
+  }
+  const looked = lookupAny(name);
+  if (looked.kind === "MELAKARTA") {
+    setStatusError(`"${name}" is a melakarta — Aro/Ava can't be edited`);
+    return false;
+  }
+  const mel = Number.parseInt(editRagaMel.value.trim(), 10);
+  if (!Number.isFinite(mel) || mel < 1 || mel > 72) {
+    setStatusError("Melakarta # must be 1–72");
+    return false;
+  }
+  try {
+    applyCorrection(name, mel, editRagaAro.value, editRagaAva.value, editRagaDwija.checked);
+  } catch (err) {
+    setStatusError(err instanceof Error ? err.message : String(err));
+    return false;
+  }
+  render();
+  setStatusOk(`Saved "${name}" to this browser’s raga library — ArO/avarO on the score is updated`);
+  return true;
+}
+
 // ---- Menubar -------------------------------------------------------------------
 
 function sampleMenuItems(): MenuItem[] {
@@ -1160,6 +1262,10 @@ function buildAppMenus(): void {
           label: "Raagam Name…",
           action: () => promptAndInsert("Raagam name (roman catalogue spelling)", (v) => `Raagam: ${v}\n`, "Sri"),
         },
+        {
+          label: "Edit Raga (Aro/Ava)…",
+          action: () => openEditRagaDialog(),
+        },
         { label: "Tala Name…", action: promptTala },
         {
           label: "Melakarta Number…",
@@ -1242,6 +1348,14 @@ ragamDisplay.addEventListener("input", () => {
 });
 saveHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(false));
 resetHeadersBtn.addEventListener("click", () => applyDisplayNamesToSource(true));
+editRagaBtn.addEventListener("click", () => openEditRagaDialog());
+editRagaName.addEventListener("change", () => fillEditRagaForm(editRagaName.value));
+editRagaForm.addEventListener("submit", (ev) => {
+  const submitter = (ev as SubmitEvent).submitter as HTMLButtonElement | null;
+  if (submitter?.value === "cancel") return;
+  ev.preventDefault();
+  if (saveEditRagaFromForm()) editRagaDialog.close();
+});
 syntaxHelpDismiss.addEventListener("click", () => {
   syntaxHelpDismissed = true;
   syntaxHelp.hidden = true;

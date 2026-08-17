@@ -76,6 +76,8 @@ export {
   lookupAny,
   encodeUserSequence,
   decodeForEditing,
+  applyCorrection,
+  correctionsLoadedCount,
   MELAKARTA_NAMES,
 } from "./core/Ragas.js";
 export type { JanyaRaga, RagaKind, RagaLookup } from "./core/Ragas.js";

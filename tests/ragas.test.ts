@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyCorrection,
   dwijaCount,
   janyaCount,
   janyaAroAva,
@@ -45,5 +46,26 @@ describe("Ragas", () => {
     expect(lookupAny("Mayamalavagowla").kind).toBe("MELAKARTA");
     expect(lookupAny("Hamsadwani").kind).toBe("JANYA");
     expect(lookupAny("NotARealRagaXYZ").kind).toBe("UNKNOWN");
+  });
+
+  it("applyCorrection updates janya Aro/Ava in-memory", () => {
+    applyCorrection("TestAroAvaRagaXYZ", 29, "S R G P N S", "S N D P G R S", false);
+    const j = janyaForName("TestAroAvaRagaXYZ");
+    expect(j).not.toBeNull();
+    expect(j!.aro).toBe("SRGPNS");
+    expect(j!.ava).toBe("SNDPGRS");
+    expect(janyaAroAva(j!)!).toContain("D₂");
+    expect(() => applyCorrection("Kalyani", 65, "S R G M P D N S", "S N D P M G R S", false)).toThrow(
+      /melakarta/i,
+    );
+  });
+
+  it("applyCorrection overrides a bundled janya Aro/Ava", () => {
+    const orig = janyaForName("Hamsadwani");
+    expect(orig).not.toBeNull();
+    applyCorrection("Hamsadwani", orig!.melakarta, "S R G P S", orig!.ava, false);
+    expect(janyaForName("Hamsadwani")!.aro).toBe("SRGPS");
+    applyCorrection("Hamsadwani", orig!.melakarta, orig!.aro, orig!.ava, false);
+    expect(janyaForName("Hamsadwani")!.aro).toBe(orig!.aro);
   });
 });

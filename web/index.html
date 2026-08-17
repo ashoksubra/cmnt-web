@@ -119,7 +119,45 @@
           <button id="reset-headers-btn" type="button" class="secondary-btn" title="Clear RaagamDisplay: from source">
             Clear ragam
           </button>
+          <button id="edit-raga-btn" type="button" class="secondary-btn" title="Correct Arohana/Avarohana in the raga library (saved in this browser)">
+            Edit Aro/Ava…
+          </button>
         </div>
+
+        <dialog id="edit-raga-dialog" class="edit-raga-dialog">
+          <form method="dialog" id="edit-raga-form" class="edit-raga-form">
+            <h2>Edit raga (Aro / Ava)</h2>
+            <p class="edit-raga-hint">
+              Corrects a wrong bundled ārōhana/avarōhana (or adds a missing janya). The score updates immediately and the fix is kept in this browser. The 72 mēḷakartas use a fixed formula and cannot be edited.
+              Type notes as <code>S R G M P D N</code> (use <code>M1</code>/<code>M2</code> for dwi-madhyama). Spaces optional.
+            </p>
+            <label class="field">
+              <span>Raga name</span>
+              <input id="edit-raga-name" type="text" spellcheck="false" autocomplete="off" required />
+            </label>
+            <p id="edit-raga-current" class="edit-raga-current" aria-live="polite"></p>
+            <label class="field">
+              <span>Melakarta # (1–72)</span>
+              <input id="edit-raga-mel" type="number" min="1" max="72" step="1" required />
+            </label>
+            <label class="field">
+              <span>Arohana</span>
+              <input id="edit-raga-aro" type="text" spellcheck="false" autocomplete="off" placeholder="S R G P N S" required />
+            </label>
+            <label class="field">
+              <span>Avarohana</span>
+              <input id="edit-raga-ava" type="text" spellcheck="false" autocomplete="off" placeholder="S N P G R S" required />
+            </label>
+            <label class="field field-checkbox">
+              <input id="edit-raga-dwija" type="checkbox" />
+              <span>Dwi-madhyama (both M1 and M2)</span>
+            </label>
+            <div class="edit-raga-actions">
+              <button type="submit" value="save" class="primary-btn">Save to library</button>
+              <button type="submit" value="cancel" class="secondary-btn" formnovalidate>Cancel</button>
+            </div>
+          </form>
+        </dialog>
 
         <div id="syntax-help" class="syntax-help" hidden>
           <div class="syntax-help-header">

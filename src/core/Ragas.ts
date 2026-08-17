@@ -127,6 +127,138 @@ loadTable(janyasTsv, JANYA_BY_NAME);
 loadTable(janyasDwijaTsv, DWIJA_BY_NAME);
 loadTable(sriRagamTsv, DWIJA_BY_NAME);
 
+/** Browser persistence for user corrections (mirrors JAR raga_corrections*.tsv). */
+const LS_JANYA = "cmnt.raga_corrections";
+const LS_DWIJA = "cmnt.raga_corrections_dwija";
+
+let correctionsLoaded = 0;
+
+function storageGet(key: string): string | null {
+  try {
+    // Avoid Node's experimental localStorage stub (warns without --localstorage-file).
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(key: string, value: string): void {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function loadCorrectionsFromStorage(): void {
+  correctionsLoaded += loadCorrectionTsv(storageGet(LS_JANYA), JANYA_BY_NAME);
+  correctionsLoaded += loadCorrectionTsv(storageGet(LS_DWIJA), DWIJA_BY_NAME);
+}
+
+function loadCorrectionTsv(text: string | null, into: Map<string, JanyaRaga>): number {
+  if (text == null || text.trim() === "") return 0;
+  let n = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
+    const parts = trimmed.split("\t");
+    if (parts.length !== 4) continue;
+    const mel = Number.parseInt(parts[0]!, 10);
+    if (Number.isNaN(mel) || mel < 1 || mel > 72) continue;
+    const name = parts[1]!.trim();
+    const aro = encodeUserSequence(parts[2]);
+    const ava = encodeUserSequence(parts[3]);
+    if (name === "" || aro === "" || ava === "") continue;
+    into.set(normalize(name), { name, melakarta: mel, aro, ava });
+    n++;
+  }
+  return n;
+}
+
+function persistCorrectionTable(key: string, name: string, entry: JanyaRaga): void {
+  const lines: string[] = [];
+  const existing = storageGet(key);
+  if (existing != null) {
+    for (const line of existing.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      if (trimmed.startsWith("#")) {
+        lines.push(trimmed);
+        continue;
+      }
+      const parts = trimmed.split("\t");
+      if (parts.length === 4 && normalize(parts[1]) === normalize(name)) continue;
+      lines.push(trimmed);
+    }
+  }
+  lines.push(`${entry.melakarta}\t${entry.name}\t${entry.aro}\t${entry.ava}`);
+  storageSet(key, lines.join("\n") + "\n");
+}
+
+loadCorrectionsFromStorage();
+
+export function correctionsLoadedCount(): number {
+  return correctionsLoaded;
+}
+
+/**
+ * Fix or add a janya / dwi-madhyama raga in the live tables and persist to
+ * localStorage (browser). Melakartas are formula-based and cannot be edited.
+ */
+export function applyCorrection(
+  name: string,
+  melakarta: number,
+  aroInput: string,
+  avaInput: string,
+  dwija: boolean,
+): void {
+  const aro = encodeUserSequence(aroInput);
+  const ava = encodeUserSequence(avaInput);
+  const trimmed = name?.trim() ?? "";
+  if (trimmed === "") throw new Error("Raga name can't be empty.");
+  if (melakarta < 1 || melakarta > 72) throw new Error("Melakarta number must be 1-72.");
+  if (aro === "" || ava === "") throw new Error("Arohana/Avarohana can't be empty.");
+  if (melakartaNumberForName(trimmed) != null) {
+    throw new Error(
+      `"${trimmed}" is a melakarta — its Aro/Ava comes from a fixed formula and can't be edited here.`,
+    );
+  }
+  const entry: JanyaRaga = { name: trimmed, melakarta, aro, ava };
+  const table = dwija ? DWIJA_BY_NAME : JANYA_BY_NAME;
+  // Move out of the other table if the dwija flag changed.
+  const other = dwija ? JANYA_BY_NAME : DWIJA_BY_NAME;
+  other.delete(normalize(trimmed));
+  table.set(normalize(trimmed), entry);
+  persistCorrectionTable(dwija ? LS_DWIJA : LS_JANYA, trimmed, entry);
+  // Drop from the opposite storage file if present.
+  persistRemoveFromStorage(dwija ? LS_JANYA : LS_DWIJA, trimmed);
+  correctionsLoaded++;
+}
+
+function persistRemoveFromStorage(key: string, name: string): void {
+  const existing = storageGet(key);
+  if (existing == null) return;
+  const lines: string[] = [];
+  let changed = false;
+  for (const line of existing.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    if (trimmed.startsWith("#")) {
+      lines.push(trimmed);
+      continue;
+    }
+    const parts = trimmed.split("\t");
+    if (parts.length === 4 && normalize(parts[1]) === normalize(name)) {
+      changed = true;
+      continue;
+    }
+    lines.push(trimmed);
+  }
+  if (changed) storageSet(key, lines.length ? lines.join("\n") + "\n" : "");
+}
+
 function loadTable(text: string, into: Map<string, JanyaRaga>): void {
   for (const line of text.split(/\r?\n/)) {
     if (line.length === 0) continue;
