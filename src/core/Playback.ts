@@ -5,6 +5,12 @@
  * mapping, then schedules oscillators. No MIDI dependency — works in the
  * composer preview. Gamaka envelopes are a light sketch (kampita vibrato,
  * slide expression via gain), not a full violin/gamaka synthesis.
+ *
+ * Duration is sustain-until-next: each pitched note stays at full level until
+ * the following pitched note (or a true rest) starts. Karvai tokens `,` / `;`
+ * and `=` extend the current pitch without re-attacking. The audible envelope
+ * does not fade out before the next note — that was making phrases sound
+ * chopped into discrete plucks.
  */
 import type { Song } from "../model/Song.js";
 import { Heading } from "../model/Heading.js";
@@ -339,14 +345,16 @@ function scheduleNoteVoice(
   const t0 = startAt + n.startSec;
   const t1 = startAt + n.endSec;
   const peak = (LEVEL_GAIN[n.volumeLevel] ?? LEVEL_GAIN[2]) * 0.9;
-  const attack = Math.min(instrument.attack, dur * 0.35);
-  const release = Math.min(instrument.release, dur * 0.45);
+  const attack = Math.min(instrument.attack, dur * 0.25);
+  // Hold full level until the next note (or rest) starts. A few milliseconds
+  // after t1 only avoids a click — it must not eat into this note's duration.
+  const release = 0.012;
 
   const noteGain = ctx.createGain();
   noteGain.gain.setValueAtTime(0.0001, t0);
   noteGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + attack);
-  noteGain.gain.setValueAtTime(Math.max(0.0002, peak), Math.max(t0 + attack, t1 - release));
-  noteGain.gain.exponentialRampToValueAtTime(0.0001, t1);
+  noteGain.gain.setValueAtTime(Math.max(0.0002, peak), t1);
+  noteGain.gain.exponentialRampToValueAtTime(0.0001, t1 + release);
   noteGain.connect(master);
 
   for (const [mult, rel] of instrument.partials) {
@@ -365,7 +373,7 @@ function scheduleNoteVoice(
       lfo.connect(lfoGain);
       lfoGain.connect(osc.frequency);
       lfo.start(t0);
-      lfo.stop(t1 + 0.02);
+      lfo.stop(t1 + release + 0.02);
       stoppables.push(lfo);
     } else if (n.slideUp && mult === 1) {
       osc.frequency.setValueAtTime(hz * 0.94, t0);
@@ -380,7 +388,7 @@ function scheduleNoteVoice(
     osc.connect(partialGain);
     partialGain.connect(noteGain);
     osc.start(t0);
-    osc.stop(t1 + 0.03);
+    osc.stop(t1 + release + 0.02);
     stoppables.push(osc);
   }
 }

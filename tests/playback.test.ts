@@ -46,6 +46,45 @@ describe("planNotes", () => {
     // Mayamalavagowla: R1=1, G3=4, M1=5 → midi 61, 64, 65
     expect(notes.map((n) => n.midi)).toEqual([60, 61, 64, 65]);
   });
+
+  it("holds each pitched note until the next note starts (no gap)", () => {
+    const song = parse(
+      [
+        "Layout: Gitam",
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: English",
+        "S: s r g m",
+        "L: sa ri ga ma",
+        "",
+      ].join("\n"),
+    );
+    const notes = planNotes(song, undefined, 1);
+    expect(notes).toHaveLength(4);
+    for (let i = 0; i < notes.length - 1; i++) {
+      expect(notes[i]!.endSec).toBeCloseTo(notes[i + 1]!.startSec, 8);
+    }
+  });
+
+  it("extends a note through karvai , and ; until the next pitch", () => {
+    const song = parse(
+      [
+        "Layout: Gitam",
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: English",
+        "S: s , r ; g",
+        "L: sa - ri - ga",
+        "",
+      ].join("\n"),
+    );
+    const notes = planNotes(song, undefined, 1);
+    expect(notes).toHaveLength(3);
+    expect(notes[0]!.endSec - notes[0]!.startSec).toBeCloseTo(2, 5);
+    expect(notes[1]!.endSec - notes[1]!.startSec).toBeCloseTo(3, 5);
+    expect(notes[0]!.endSec).toBeCloseTo(notes[1]!.startSec, 8);
+    expect(notes[1]!.endSec).toBeCloseTo(notes[2]!.startSec, 8);
+  });
 });
 
 describe("extractRagaMapping", () => {
