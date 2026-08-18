@@ -32,5 +32,5 @@ See also the Cursor canvas timeline in the parent CMNT project conversation.
 - [x] Localized editable Raagam/Taalam headers
 - [x] Telugu / Kannada / Sanskrit in Language UI
 - [x] Playback (Web Audio Play/Stop from layout + melakarta/Aro mapping)
-- [ ] Hosting / shareable links
+- [x] Hosting / shareable links (GitHub Pages + Cloudflare Pages)
 - [ ] Further UI chrome (instrument picker, tempo, zoom, Edit undo stack)
