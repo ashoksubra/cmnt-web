@@ -3,6 +3,12 @@ import { Heading } from "./Heading.js";
 import { SongBlock } from "./SongBlock.js";
 import type { Tala } from "./Tala.js";
 
+export type ParseWarning = {
+  line: number;
+  message: string;
+  severity: "error" | "hint";
+};
+
 export class Song {
   tala: Tala;
   defaultSpeed = 1;
@@ -24,6 +30,8 @@ export class Song {
   ragaDisplayRoman: string | null = null;
   /** Optional CMNT-roman display spelling (TalamDisplay:). */
   talaDisplayRoman: string | null = null;
+  /** Non-fatal issues from a live/lenient parse (empty for a strict parse). */
+  parseWarnings: ParseWarning[] = [];
 
   constructor(tala: Tala) {
     this.tala = tala;

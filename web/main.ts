@@ -152,7 +152,10 @@ const CLASSIC_SYNTAX_HELP = [
   "DefaultSpeed: 0",
   "",
   "S: s r g m | p d n s'",
-  "L: sa ri ga ma pa da ni sa",
+  "L: sa ri ga ma | pa da ni sa   (bars | on L: are ignored)",
+  "",
+  "Select notes, then Insert → Speed (2nd/3rd/4th) or Insert → Gamaka.",
+  "A { sA r s r … }(kh) cluster fills one parent beat; sA is twice a short note.",
   "",
   "Tip: start with --- for optional YAML front matter (keys lowercase).",
 ].join("\n");
@@ -211,6 +214,11 @@ function forceScriptFor(lang: UiLangOverride): Script | undefined {
 function setStatusOk(message = "Ready"): void {
   statusLine.textContent = message;
   statusLine.className = "status status-ok";
+}
+
+function setStatusHint(message: string): void {
+  statusLine.textContent = message;
+  statusLine.className = "status status-hint";
 }
 
 function setStatusError(message: string): void {
@@ -494,14 +502,26 @@ function applyDisplayNamesToSource(clear = false): void {
 /** On-screen preview width (px). */
 const PREVIEW_CONTENT_WIDTH = 1100;
 const ROW_LABEL_GUTTER = 36;
+let lastGoodSvg = "";
 
-function renderScoreAtWidth(contentWidth: number): {
+function caretLineNumber(): number {
+  const pos = sourceInput.selectionStart ?? 0;
+  return sourceInput.value.slice(0, pos).split("\n").length;
+}
+
+function renderScoreAtWidth(
+  contentWidth: number,
+  live = false,
+): {
   svg: string;
   items: LayoutItem[];
   forceScript: Script | undefined;
+  warnings: { line: number; message: string; severity: "error" | "hint" }[];
 } {
   const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
-  const song = parse(sourceInput.value);
+  const song = live
+    ? parse(sourceInput.value, { live: true, caretLine: caretLineNumber() })
+    : parse(sourceInput.value);
   const unitWidthScale = currentSchool.density.unitWidthScale;
   const measureCellWidth = createCanvasCellMeasurer({ forceScript });
   // Cycle-fit only (JAR layoutFittingLetter). Do not mid-wrap cells — short
@@ -521,7 +541,7 @@ function renderScoreAtWidth(contentWidth: number): {
     },
     measureCellWidth,
   });
-  return { svg, items, forceScript };
+  return { svg, items, forceScript, warnings: song.parseWarnings };
 }
 
 /** Insert or replace DefaultSpeed: in the source (notation density 0/1/2 — not BPM). */
@@ -563,12 +583,22 @@ function applyNotationDefaultSpeed(n: number): void {
 
 function render(): void {
   try {
-    const { svg, items, forceScript } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH);
+    const { svg, items, forceScript, warnings } = renderScoreAtWidth(PREVIEW_CONTENT_WIDTH, true);
     syncHeaderFields(items);
     scorePage.innerHTML = svg;
+    lastGoodSvg = svg;
     applyLangFontClass(activeIndicScript(items, forceScript));
-    setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
+    const hard = warnings.find((w) => w.severity === "error");
+    const hint = warnings.find((w) => w.severity === "hint");
+    if (hard) {
+      setStatusError(`Line ${hard.line} — ${hard.message}`);
+    } else if (hint) {
+      setStatusHint(`Still typing (line ${hint.line}): ${hint.message}`);
+    } else {
+      setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
+    }
   } catch (err) {
+    if (lastGoodSvg) scorePage.innerHTML = lastGoodSvg;
     if (err instanceof ParseException) {
       setStatusError(`Parse error: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
       // Live update while typing: scroll only — do not select the whole line.
@@ -577,9 +607,11 @@ function render(): void {
       const message = err instanceof Error ? err.message : String(err);
       setStatusError(`Error: ${message}`);
     }
-    scorePage.innerHTML = `<p class="app-error">${escapeHtml(
-      err instanceof Error ? err.message : String(err),
-    )}</p>`;
+    if (!lastGoodSvg) {
+      scorePage.innerHTML = `<p class="app-error">${escapeHtml(
+        err instanceof Error ? err.message : String(err),
+      )}</p>`;
+    }
   }
 }
 
@@ -968,7 +1000,33 @@ function replaceRange(from: number, to: number, text: string, selectEnd = true):
   scheduleRender();
 }
 
-/** Attach / replace a gamaka mark on an existing swara token. */
+function wrapSelection(prefix: string, suffix: string, ok: string): boolean {
+  const start = sourceInput.selectionStart ?? 0;
+  const end = sourceInput.selectionEnd ?? start;
+  if (start === end) {
+    setStatusError("Select the notes in the S: line first");
+    return false;
+  }
+  const raw = sourceInput.value.slice(start, end);
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    setStatusError("Select the notes in the S: line first");
+    return false;
+  }
+  const lead = raw.indexOf(trimmed);
+  replaceRange(start + lead, start + lead + trimmed.length, `${prefix}${trimmed}${suffix}`);
+  setStatusOk(ok);
+  return true;
+}
+
+/** Wrap highlighted notes as 2nd / 3rd / 4th speed (one/two/three paren levels). */
+function wrapSelectionAsSpeed(levels: 1 | 2 | 3): void {
+  const open = "( ".repeat(levels);
+  const close = " )".repeat(levels);
+  const label = levels === 1 ? "2nd" : levels === 2 ? "3rd" : "4th";
+  wrapSelection(open, close, `${label} speed — notes share the parent beat`);
+}
+
 function attachGamakaToToken(tok: string, mark: string): string | null {
   if (!GAMAKA_MARK_RE.test(mark)) return null;
   const m = SWARA_WITH_GAMAKA_RE.exec(tok);
@@ -987,6 +1045,11 @@ function insertGamakaMark(mark: string): void {
 
   if (start !== end) {
     const sel = value.slice(start, end).trim();
+    if (/\s/.test(sel)) {
+      const tag = mark.replace(/[^A-Za-z0-9~]/g, "") || "kh";
+      wrapSelection("{ ", ` }(${tag})`, `Gamaka cluster { … }(${tag}) — fills one parent beat`);
+      return;
+    }
     const attached = attachGamakaToToken(sel, mark);
     if (attached != null) {
       // Expand trim: replace only the trimmed token inside the selection.
@@ -1208,6 +1271,13 @@ function buildAppMenus(): void {
     { label: "Odukkal cluster  { }(od)", action: () => insertGamakaCluster("od") },
     { label: "Orikai cluster  { }(or)", action: () => insertGamakaCluster("or") },
     { label: "VaLi cluster  { }(vl)", action: () => insertGamakaCluster("vl") },
+    { label: "Kampita cluster  { }(~)", action: () => insertGamakaCluster("~") },
+  ];
+
+  const speedItems: MenuItem[] = [
+    { label: "2nd speed  ( … )", action: () => wrapSelectionAsSpeed(1) },
+    { label: "3rd speed  (( … ))", action: () => wrapSelectionAsSpeed(2) },
+    { label: "4th speed  ((( … )))", action: () => wrapSelectionAsSpeed(3) },
   ];
 
   const languageItems: MenuItem[] = [
@@ -1256,6 +1326,7 @@ function buildAppMenus(): void {
       label: "Insert",
       items: [
         { label: "Gamaka", submenu: gamakaItems },
+        { label: "Speed (2nd / 3rd / 4th)", submenu: speedItems },
         { label: "Language", submenu: languageItems },
         { separator: true },
         {
@@ -1369,6 +1440,12 @@ sourceInput.addEventListener("input", () => {
   updateSyntaxHelp();
   scheduleRender();
 });
+sourceInput.addEventListener("keyup", (ev) => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(ev.key)) {
+    scheduleRender();
+  }
+});
+sourceInput.addEventListener("click", () => scheduleRender());
 sourceInput.addEventListener("keydown", (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
     ev.preventDefault();

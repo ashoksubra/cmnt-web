@@ -13,6 +13,8 @@ export class Swara {
   clusterGamaka: string | null = null;
   clusterStart = false;
   clusterEnd = false;
+  /** When set (gamaka cluster scaled to one parent-speed slot), overrides speed/length. */
+  durationOverride: Fraction | null = null;
 
   constructor(
     label: string,
@@ -49,6 +51,7 @@ export class Swara {
   }
 
   duration(gati: number): Fraction {
+    if (this.durationOverride != null) return this.durationOverride;
     const effective = this.gatiOverride != null ? this.gatiOverride : gati;
     let denom = 1;
     if (this.speed > 0) {

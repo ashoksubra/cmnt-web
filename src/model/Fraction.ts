@@ -41,6 +41,10 @@ export class Fraction {
     return new Fraction(this.num, this.den * k);
   }
 
+  times(o: Fraction): Fraction {
+    return new Fraction(this.num * o.num, this.den * o.den);
+  }
+
   /** Modulo against a positive whole-number cycle length (akshara count). */
   mod(cycleLen: number): Fraction {
     if (cycleLen <= 0) return this;

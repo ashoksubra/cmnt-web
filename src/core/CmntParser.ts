@@ -6,6 +6,7 @@ import { Fraction } from "../model/Fraction.js";
 import { Gati } from "../model/Gati.js";
 import { Swara } from "../model/Swara.js";
 import { Song } from "../model/Song.js";
+import type { ParseWarning } from "../model/Song.js";
 import { SongBlock, Notation } from "../model/SongBlock.js";
 import { Heading } from "../model/Heading.js";
 import { SongBreak, PageBreak, GatiSwitch } from "../model/Breaks.js";
@@ -33,7 +34,7 @@ const HEADING_RE = /^Heading:\s*"([^"]*)"(.*)$/i;
 const LABEL_RE = /^"([^"]*)"$/;
 const GATI_BEGIN_RE = /^<\/?GTB(?::([A-Za-z]+))?>$/i;
 const GATI_END_RE = /^<\/?GTE>$/i;
-const CLUSTER_END_RE = /^\}\(([A-Za-z0-9]+)\)$/;
+const CLUSTER_END_RE = /^\}\(([A-Za-z0-9~]+)\)$/;
 
 const NAMED_COLORS = new Set([
   "black",
@@ -96,7 +97,40 @@ function parseJavaInt(v: string): number {
   return parseInt(v, 10);
 }
 
+export type ParseOptions = {
+  /** Keep rendering while typing: pad incomplete pairs, skip half-typed tokens. */
+  live?: boolean;
+  /** 1-based caret line; the S:/L: pair on this line is treated as still being typed. */
+  caretLine?: number;
+};
+
+const LYRIC_SKIP = new Set(["|", "||", "(", ")", "{"]);
+
+function isLyricSkipToken(tok: string): boolean {
+  return LYRIC_SKIP.has(tok) || CLUSTER_END_RE.test(tok);
+}
+
+function describeLyricMismatch(swaraLabels: string[], lyrics: string[]): string {
+  const nS = swaraLabels.length;
+  const nL = lyrics.length;
+  if (nL < nS) {
+    const missing = swaraLabels.slice(nL);
+    const after = nL === 0 ? "the start of the line" : `«${lyrics[nL - 1]}»`;
+    return (
+      `L: has ${nL} syllable${nL === 1 ? "" : "s"}, S: has ${nS} notes. ` +
+      `After ${after}, add lyrics for: ${missing.join(" ")}`
+    );
+  }
+  const extra = lyrics.slice(nS);
+  return (
+    `L: has ${nL} syllables, S: has ${nS} notes. ` +
+    `Extra lyrics starting at «${extra[0]}»: ${extra.join(" ")}`
+  );
+}
+
 class Parser {
+  readonly warnings: ParseWarning[] = [];
+  constructor(private readonly opts: ParseOptions = {}) {}
   private defSpeed: number | null = null;
   private defTalaName: string | null = null;
   // Ragam/Talam are shown as one combined heading line once both are known; whichever
@@ -118,6 +152,8 @@ class Parser {
   private swaras: Swara[] = [];
   private lyrics: string[][] = [];
   private lastSwaraLineCount = 0;
+  private lastSwaraLabels: string[] = [];
+  private lastSwaraLineNo = 0;
   private lyricLineIndex = 0;
   private curNotationHeading: string | null = null;
   private headingPrefs = new Prefs("12");
@@ -129,6 +165,41 @@ class Parser {
   private inlineRegionDur: Fraction = Fraction.ZERO;
   private notationPos: Fraction = Fraction.ZERO;
   private clusterStartIndex = -1; // index into `swaras` where an open {..} gamaka cluster began, or -1
+  private clusterOuterSpeed = 0;
+
+  private live(): boolean {
+    return this.opts.live === true;
+  }
+
+  private warn(line: number, message: string, severity: ParseWarning["severity"]): void {
+    this.warnings.push({ line, message, severity });
+  }
+
+  private isDraftPair(lyricLineNo: number): boolean {
+    if (!this.live()) return false;
+    const caret = this.opts.caretLine;
+    if (caret == null) return true;
+    if (caret === this.lastSwaraLineNo || caret === lyricLineNo) return true;
+    if (caret > this.lastSwaraLineNo && caret < lyricLineNo) return true;
+    return false;
+  }
+
+  /** Scale cluster notes so they occupy exactly one parent-speed akshara slot. */
+  private scaleClusterToParentSlot(start: number, outerSpeed: number): void {
+    if (start >= this.swaras.length) return;
+    const gati = this.swaras[start]!.gatiOverride ?? this.curGati;
+    const slot = new Swara("x", false, 0, 1, outerSpeed).duration(gati);
+    let total = Fraction.ZERO;
+    for (let i = start; i < this.swaras.length; i++) {
+      total = total.add(this.swaras[i]!.duration(gati));
+    }
+    if (total.isZero() || total.equals(slot)) return;
+    const invTotal = new Fraction(total.den, total.num);
+    for (let i = start; i < this.swaras.length; i++) {
+      const d = this.swaras[i]!.duration(gati);
+      this.swaras[i]!.durationOverride = d.times(slot).times(invTotal);
+    }
+  }
 
   private commitBlock(): void {
     if (this.swaras.length === 0 || this.song === null) {
@@ -161,6 +232,7 @@ class Parser {
       let lyricIdx = 0;
       for (const n of notations) {
         if (n.swara.label === "|" || n.swara.label === "||") continue;
+        if (n.swara.clusterGamaka != null && !n.swara.clusterStart) continue;
         if (lyricIdx < ll.length) n.lyrics[j] = ll[lyricIdx]!;
         lyricIdx++;
       }
@@ -565,6 +637,8 @@ class Parser {
           baseSpeed += Talas.notationSpeedShift(this.layout, song.tala);
           let speed = baseSpeed;
           this.lastSwaraLineCount = 0;
+          this.lastSwaraLabels = [];
+          this.lastSwaraLineNo = lineNo;
           this.lyricLineIndex = 0;
           let start = 1;
           this.curNotationHeading = null;
@@ -584,7 +658,13 @@ class Parser {
               continue;
             }
             if (tok === ")") {
-              if (speed === baseSpeed) throw new ParseException("paren mismatch", lineNo);
+              if (speed === baseSpeed) {
+                if (this.live()) {
+                  this.warn(lineNo, "Extra ) — no matching speed group", "hint");
+                  continue;
+                }
+                throw new ParseException("paren mismatch", lineNo);
+              }
               speed--;
               continue;
             }
@@ -593,6 +673,7 @@ class Parser {
                 throw new ParseException("nested gamaka cluster { } is not supported", lineNo);
               }
               this.clusterStartIndex = this.swaras.length;
+              this.clusterOuterSpeed = speed;
               continue;
             }
             const clusterEnd = CLUSTER_END_RE.exec(tok);
@@ -604,11 +685,17 @@ class Parser {
                 throw new ParseException("empty gamaka cluster { }", lineNo);
               }
               const tag = clusterEnd[1]!;
+              const clusterLen = this.swaras.length - this.clusterStartIndex;
               for (let ci = this.clusterStartIndex; ci < this.swaras.length; ci++) {
                 this.swaras[ci]!.clusterGamaka = tag;
               }
               this.swaras[this.clusterStartIndex]!.clusterStart = true;
               this.swaras[this.swaras.length - 1]!.clusterEnd = true;
+              if (clusterLen > 1) {
+                this.lastSwaraLineCount -= clusterLen - 1;
+                this.lastSwaraLabels.splice(this.lastSwaraLabels.length - (clusterLen - 1), clusterLen - 1);
+              }
+              this.scaleClusterToParentSlot(this.clusterStartIndex, this.clusterOuterSpeed);
               this.clusterStartIndex = -1;
               continue;
             }
@@ -634,7 +721,13 @@ class Parser {
               continue;
             }
             const sr = this.parseSwaraToken(tok, speed, talaName);
-            if (sr.error !== null) throw new ParseException(sr.error, lineNo);
+            if (sr.error !== null) {
+              if (this.live()) {
+                this.warn(lineNo, sr.error, "hint");
+                continue;
+              }
+              throw new ParseException(sr.error, lineNo);
+            }
             if (sr.swara === null) continue;
             const sw = sr.swara;
             if (this.inlineGati !== null) sw.gatiOverride = this.inlineGati;
@@ -643,11 +736,18 @@ class Parser {
             this.notationPos = this.notationPos.add(dur);
             if (this.inlineGati !== null) this.inlineRegionDur = this.inlineRegionDur.add(dur);
             this.swaras.push(sw);
-            if (!sr.ignore) this.lastSwaraLineCount++;
+            if (!sr.ignore) {
+              this.lastSwaraLineCount++;
+              this.lastSwaraLabels.push(sw.displayLabel());
+            }
           }
           if (this.clusterStartIndex !== -1) {
             this.clusterStartIndex = -1;
-            throw new ParseException("unclosed gamaka cluster (missing '}(tag)')", lineNo);
+            if (this.live()) {
+              this.warn(lineNo, "Unclosed gamaka cluster — finish with }(tag) when this group is done", "hint");
+            } else {
+              throw new ParseException("unclosed gamaka cluster (missing '}(tag)')", lineNo);
+            }
           }
         } else {
           // lyric
@@ -657,15 +757,19 @@ class Parser {
           for (let ti = 1; ti < tokens.length; ti++) {
             let tok = tokens[ti]!;
             if (tok === "") continue;
+            if (isLyricSkipToken(tok)) continue;
             if (tok === "_" || tok === "''" || tok === "' '" || tok === '""' || tok === '" "') tok = " ";
             lyricLine.push(tok);
             nLyrics++;
           }
           if (nLyrics !== this.lastSwaraLineCount) {
-            throw new ParseException(
-              `lyric line does not match swara line - has ${nLyrics} lyrics - expected ${this.lastSwaraLineCount}`,
-              lineNo,
-            );
+            const detail = describeLyricMismatch(this.lastSwaraLabels, lyricLine);
+            if (this.live()) {
+              const draft = this.isDraftPair(lineNo);
+              this.warn(lineNo, detail, draft ? "hint" : "error");
+            } else {
+              throw new ParseException(detail, lineNo);
+            }
           }
           this.lyricLineIndex++;
         }
@@ -829,6 +933,7 @@ class Parser {
     if (this.inlineGati !== null) throw new ParseException("unclosed inline gati region (missing <GTE>)", 0);
 
     const song = this.song;
+    song.parseWarnings = this.warnings;
     for (const p of song.parts as SongPart[]) {
       if (p instanceof Heading && p.text.trim() !== "") {
         song.title = p.text;
@@ -839,7 +944,7 @@ class Parser {
   }
 }
 
-export function parse(text: string): Song {
+export function parse(text: string, opts: ParseOptions = {}): Song {
   let preprocessed: string;
   try {
     preprocessed = YamlFrontMatter.preprocess(text);
@@ -847,5 +952,5 @@ export function parse(text: string): Song {
     if (e instanceof YamlFrontMatter.YamlFrontMatterError) throw new ParseException(e.message, 0);
     throw e;
   }
-  return new Parser().doParse(preprocessed);
+  return new Parser(opts).doParse(preprocessed);
 }
