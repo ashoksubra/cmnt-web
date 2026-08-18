@@ -5,6 +5,7 @@ import {
   parseDynMark,
   extractRagaMapping,
   clampPlaybackSpeed,
+  phraseSeparatorGapSec,
   clampBpm,
   DEFAULT_BPM,
   INSTRUMENTS,
@@ -84,6 +85,29 @@ describe("planNotes", () => {
     expect(notes[1]!.endSec - notes[1]!.startSec).toBeCloseTo(3, 5);
     expect(notes[0]!.endSec).toBeCloseTo(notes[1]!.startSec, 8);
     expect(notes[1]!.endSec).toBeCloseTo(notes[2]!.startSec, 8);
+  });
+
+  it("leaves a micro-pause after a phrase-end hyphen without shifting tala", () => {
+    const song = parse(
+      [
+        "Layout: Gitam",
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: English",
+        "S: s r- g m",
+        "L: sa ri ga ma",
+        "",
+      ].join("\n"),
+    );
+    const beat = 1;
+    const notes = planNotes(song, undefined, beat);
+    expect(notes).toHaveLength(4);
+    expect(notes[0]!.endSec).toBeCloseTo(notes[1]!.startSec, 8);
+    const gap = notes[2]!.startSec - notes[1]!.endSec;
+    expect(gap).toBeCloseTo(phraseSeparatorGapSec(beat, notes[1]!.endSec - notes[1]!.startSec), 8);
+    expect(gap).toBeGreaterThan(0.03);
+    expect(notes[2]!.startSec).toBeCloseTo(2, 5);
+    expect(notes[3]!.startSec).toBeCloseTo(3, 5);
   });
 });
 

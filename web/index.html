@@ -58,10 +58,18 @@
             <span>Live update</span>
           </label>
 
+          <label
+            class="field field-checkbox"
+            title="Experimental synthesized playback. Off by default — it is a practice sketch, not a finished gamaka model."
+          >
+            <input type="checkbox" id="audio-play-toggle" />
+            <span>Audio play</span>
+          </label>
+
           <button id="render-btn" type="button" class="primary-btn">Update</button>
         </div>
 
-        <div class="playback-bar" title="Playback instrument and speed (applied on Play)">
+        <div class="playback-bar" hidden title="Playback instrument and speed (applied on Play)">
           <label class="field" title="Beats per minute (1 akshara = 1 beat). Notation DefaultSpeed 0/1/2 is separate — Insert → Default Speed…">
             <span>BPM</span>
             <input

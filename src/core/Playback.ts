@@ -11,6 +11,10 @@
  * and `=` extend the current pitch without re-attacking. The audible envelope
  * does not fade out before the next note — that was making phrases sound
  * chopped into discrete plucks.
+ *
+ * Phrase-end hyphens in the source (`p- sA`, rendered as a centered "-")
+ * insert a short breath before the next attack. Tala alignment is kept: the
+ * gap is stolen from the end of the phrase, not added to the timeline.
  */
 import type { Song } from "../model/Song.js";
 import { Heading } from "../model/Heading.js";
@@ -103,9 +107,20 @@ export function planNotes(
   const notes: PlannedNote[] = [];
   let t = 0;
   let open: PlannedNote | null = null;
+  let openPhraseEnd = false;
   let level = 2;
   let prevMidi: number | null = null;
   const beat = Math.max(0.05, secondsPerAkshara);
+
+  const closeOpen = (at: number, applyPhraseGap: boolean): void => {
+    if (open == null) return;
+    const held = Math.max(0, at - open.startSec);
+    const gap = applyPhraseGap && openPhraseEnd ? phraseSeparatorGapSec(beat, held) : 0;
+    open.endSec = Math.max(open.startSec, at - gap);
+    if (open.endSec > open.startSec) notes.push(open);
+    open = null;
+    openPhraseEnd = false;
+  };
 
   for (const it of layout) {
     if (!(it instanceof VisualRow)) continue;
@@ -115,16 +130,14 @@ export function planNotes(
       if (dur <= 0) continue;
 
       if (c.isRest) {
-        if (open != null) {
-          open.endSec = t;
-          notes.push(open);
-          open = null;
-        }
+        // A full rest already demarcates; do not also steal a micro-gap.
+        closeOpen(t, false);
         t += dur;
         continue;
       }
       if (c.isSustain) {
         t += dur;
+        if (c.phraseEnd) openPhraseEnd = true;
         continue;
       }
 
@@ -146,10 +159,7 @@ export function planNotes(
         else if (midi < prevMidi) level = Math.max(1, level - 1);
       }
 
-      if (open != null) {
-        open.endSec = t;
-        notes.push(open);
-      }
+      closeOpen(t, true);
 
       let kampita = gamaka === "~" || gamaka === "~~";
       let slideUp = gamaka === "/" || gamaka === "//";
@@ -170,13 +180,11 @@ export function planNotes(
         slideDown,
       };
       prevMidi = midi;
+      openPhraseEnd = c.phraseEnd;
       t += dur;
     }
   }
-  if (open != null) {
-    open.endSec = t;
-    notes.push(open);
-  }
+  closeOpen(t, true);
   return notes;
 }
 
@@ -294,6 +302,16 @@ export function clampBpm(bpm: number): number {
 export function clampPlaybackSpeed(speed: number): number {
   if (!Number.isFinite(speed)) return 1;
   return Math.min(2.5, Math.max(0.4, speed));
+}
+
+/**
+ * Micro-pause after a phrase-end hyphen. Scales with tempo, never more than
+ * about a third of the note being released so short notes still speak.
+ */
+export function phraseSeparatorGapSec(secondsPerAkshara: number, heldSec: number): number {
+  const beat = Math.max(0.05, secondsPerAkshara);
+  const gap = Math.min(0.09, Math.max(0.04, beat * 0.1));
+  return Math.min(gap, Math.max(0, heldSec * 0.35));
 }
 
 export type PlaybackHandle = {

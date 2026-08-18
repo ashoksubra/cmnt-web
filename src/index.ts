@@ -94,6 +94,7 @@ export {
   instrumentById,
   clampBpm,
   clampPlaybackSpeed,
+  phraseSeparatorGapSec,
   DEFAULT_BPM,
 } from "./core/Playback.js";
 export type { PlannedNote, DynMark, PlaybackHandle, Instrument, InstrumentId, PlaySongOptions } from "./core/Playback.js";

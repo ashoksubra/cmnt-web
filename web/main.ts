@@ -77,6 +77,8 @@ const fixtureSelect = document.querySelector<HTMLSelectElement>("#fixture-select
 const langSelect = document.querySelector<HTMLSelectElement>("#lang-select")!;
 const schoolSelect = document.querySelector<HTMLSelectElement>("#school-select")!;
 const liveUpdateToggle = document.querySelector<HTMLInputElement>("#live-update-toggle")!;
+const audioPlayToggle = document.querySelector<HTMLInputElement>("#audio-play-toggle")!;
+const playbackBar = document.querySelector<HTMLElement>(".playback-bar")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
 const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrument-select")!;
 const bpmInput = document.querySelector<HTMLInputElement>("#bpm-input")!;
@@ -180,6 +182,36 @@ function updateSpeedLabel(): void {
   const s = currentPlaybackSpeed();
   const text = Number.isInteger(s) ? String(s) : s.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
   speedLabel.textContent = `${text}×`;
+}
+
+function isAudioPlayVisible(): boolean {
+  return audioPlayToggle.checked;
+}
+
+function readStoredAudioPlayVisible(): boolean {
+  try {
+    return localStorage.getItem(AUDIO_PLAY_VISIBLE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function applyAudioPlayVisible(visible: boolean, persist = true): void {
+  audioPlayToggle.checked = visible;
+  playbackBar.hidden = !visible;
+  const playMenu = document.querySelector<HTMLElement>("#play-menu");
+  if (playMenu) playMenu.hidden = !visible;
+  if (!visible) {
+    stopPlayback();
+    playbackHandle = null;
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(AUDIO_PLAY_VISIBLE_KEY, visible ? "1" : "0");
+    } catch {
+      /* private mode */
+    }
+  }
 }
 
 function populateInstrumentSelect(): void {
@@ -315,6 +347,7 @@ function updateSyntaxHelp(): void {
 }
 
 const EDITOR_SIZE_KEY = "cmnt.editorPaneSize";
+const AUDIO_PLAY_VISIBLE_KEY = "cmnt.audioPlayVisible";
 
 function isStackedLayout(): boolean {
   return window.matchMedia("(max-width: 860px)").matches;
@@ -1218,6 +1251,10 @@ function sampleMenuItems(): MenuItem[] {
 }
 
 async function playFromStart(): Promise<void> {
+  if (!isAudioPlayVisible()) {
+    setStatusOk("Turn on Audio play in the toolbar to hear a synthesized sketch");
+    return;
+  }
   try {
     const song = parse(sourceInput.value);
     const bpm = currentBpm();
@@ -1306,6 +1343,7 @@ function buildAppMenus(): void {
       ],
     },
     {
+      id: "play-menu",
       label: "Play",
       items: [
         { label: "Play from Start", shortcut: `${mod}P`, action: () => void playFromStart() },
@@ -1399,6 +1437,14 @@ schoolSelect.addEventListener("change", () => {
 renderBtn.addEventListener("click", render);
 playBtn.addEventListener("click", () => void playFromStart());
 stopBtn.addEventListener("click", stopPlay);
+audioPlayToggle.addEventListener("change", () => {
+  applyAudioPlayVisible(audioPlayToggle.checked);
+  setStatusOk(
+    audioPlayToggle.checked
+      ? "Audio play on — experimental sketch, not a finished gamaka model"
+      : "Audio play hidden",
+  );
+});
 speedSlider.addEventListener("input", () => {
   updateSpeedLabel();
 });
@@ -1467,9 +1513,11 @@ window.addEventListener("keydown", (ev) => {
     ev.preventDefault();
     newSong();
   } else if (key === "p") {
+    if (!isAudioPlayVisible()) return;
     ev.preventDefault();
     void playFromStart();
   } else if (key === ".") {
+    if (!isAudioPlayVisible()) return;
     ev.preventDefault();
     stopPlay();
   }
@@ -1486,6 +1534,7 @@ populateInstrumentSelect();
 updateSpeedLabel();
 initPaneSplitter();
 buildAppMenus();
+applyAudioPlayVisible(readStoredAudioPlayVisible(), false);
 updateDocTitle();
 sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
 currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;

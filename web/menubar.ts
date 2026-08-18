@@ -16,7 +16,7 @@ export type MenuItem = MenuAction | { separator: true } | { label: string; subme
 
 export function buildMenubar(
   root: HTMLElement,
-  menus: { label: string; items: MenuItem[] }[],
+  menus: { label: string; id?: string; items: MenuItem[] }[],
 ): void {
   root.innerHTML = "";
   root.classList.add("menubar");
@@ -24,6 +24,7 @@ export function buildMenubar(
   for (const menu of menus) {
     const wrap = document.createElement("div");
     wrap.className = "menu-root";
+    if (menu.id) wrap.id = menu.id;
 
     const btn = document.createElement("button");
     btn.type = "button";
