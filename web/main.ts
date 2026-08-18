@@ -40,6 +40,11 @@ import { buildMenubar, type MenuItem } from "./menubar";
 import { createCanvasCellMeasurer } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
+// Public (vite build / GitHub Pages) never shows Play. Local `vite` keeps it
+// so we can work on synthesis. Compile-time: import.meta.env.DEV is replaced.
+document.documentElement.classList.toggle("cmnt-dev", import.meta.env.DEV);
+document.documentElement.classList.toggle("cmnt-public", import.meta.env.PROD);
+
 import smokeAdi from "../fixtures/smoke_adi.txt?raw";
 import smokeAdiTamil from "../fixtures/smoke_adi_tamil.txt?raw";
 import smokeRupaka from "../fixtures/smoke_rupaka.txt?raw";
@@ -185,18 +190,23 @@ function updateSpeedLabel(): void {
 }
 
 function isAudioPlayVisible(): boolean {
-  return audioPlayToggle.checked;
+  return import.meta.env.DEV && audioPlayToggle.checked;
 }
 
 function readStoredAudioPlayVisible(): boolean {
+  if (import.meta.env.PROD) return false;
   try {
-    return localStorage.getItem(AUDIO_PLAY_VISIBLE_KEY) === "1";
+    const raw = localStorage.getItem(AUDIO_PLAY_VISIBLE_KEY);
+    if (raw === "0") return false;
+    if (raw === "1") return true;
   } catch {
-    return false;
+    /* private mode */
   }
+  return true;
 }
 
 function applyAudioPlayVisible(visible: boolean, persist = true): void {
+  if (import.meta.env.PROD) visible = false;
   audioPlayToggle.checked = visible;
   playbackBar.hidden = !visible;
   const playMenu = document.querySelector<HTMLElement>("#play-menu");
@@ -205,7 +215,7 @@ function applyAudioPlayVisible(visible: boolean, persist = true): void {
     stopPlayback();
     playbackHandle = null;
   }
-  if (persist) {
+  if (persist && import.meta.env.DEV) {
     try {
       localStorage.setItem(AUDIO_PLAY_VISIBLE_KEY, visible ? "1" : "0");
     } catch {

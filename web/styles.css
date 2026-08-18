@@ -333,6 +333,11 @@ body {
   color: #1f2933;
 }
 
+/* Play stays on for local `vite`; GitHub Pages never gets .cmnt-dev. */
+html:not(.cmnt-dev) #audio-play-toggle-field {
+  display: none !important;
+}
+
 .playback-bar {
   display: flex;
   flex-wrap: wrap;
