@@ -1,0 +1,67 @@
+How to fill the gamaka spreadsheet
+==================================
+
+Files
+-----
+  melakarta-gamakas.csv   Default anuswara for each scale degree in arohana
+                          and avarohana, for all 72 mēḷakartas.
+  phrases.csv             Optional overrides when neighbours change the shape
+                          (a turn, visesha sanchara, etc.).
+
+Open either file in Excel or Google Sheets. Save as CSV (UTF-8) when you send
+it back. Do not rename the column headers.
+
+Columns (melakarta-gamakas.csv)
+-------------------------------
+  melakarta   1–72
+  raga        Catalogue name (you may leave as-is)
+  direction   aroha  |  avaroha
+  swara       s  r  g  m  p  d  n  s'
+              s' is tara Sa. Add extra rows later for s` (mandra) if needed.
+  pattern     See notation below. Three kinds of cell:
+                (blank)   not decided yet — playback keeps the ¼/¾ leap
+                plain     intentionally no anuswara (straight note)
+                sA gr     expansion, scaled to that note's duration
+  notes       Free text for yourself (school, source, "only in slow kalam"…)
+
+Columns (phrases.csv)
+---------------------
+  Same as above, plus:
+  prev        Previous swara (s, r, s', …). Blank = any.
+  next        Following swara. Blank = any.
+  Lookup is prev>swara>next, then the direction default in
+  melakarta-gamakas.csv.
+
+Pattern notation (same as CMNT / the Sankarabharanam example)
+-------------------------------------------------------------
+  s r g m p d n     short swara (1 count)
+  sA rI gA mA pA dA nI   long (2 counts) — capital 2nd letter
+  s'  n`            tara / mandra stayi
+  gr                two shorts run together (same as "g r")
+  ,                 karvai, 1 count, holds the previous pitch
+  ;                 karvai, 2 counts
+  spaces            optional; "g r gA" and "grgA" parse the same
+                    except two-letter longs (sA, gA) must stay together
+
+Worked example — Sankarabharanam arohana (already filled in the sheet)
+----------------------------------------------------------------------
+  s     plain
+  r     sA gr
+  g     g r gA
+  m     gA m g
+  p     p g pA
+  d     pA s' d
+  n     s' n s' n
+  s'    p sA' ,
+
+Avarohana for 29 is left blank for you. Other mēḷakartas are blank rows.
+
+What to send back
+-----------------
+  The two CSV files (or a Google Sheet export of the same columns).
+  Partial fills are fine — only rows with a pattern (or "plain") are loaded.
+  Phrase rows are optional.
+
+After it is in the repo, playback uses: written { }(tag) in the song first,
+then a matching phrases.csv row, then aroha/avaroha for that swara, then
+the ¼/¾ leap.

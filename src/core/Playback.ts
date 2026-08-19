@@ -15,6 +15,10 @@
  * Phrase-end hyphens in the source (`p- sA`, rendered as a centered "-")
  * insert a short breath before the next attack. Tala alignment is kept: the
  * gap is stolen from the end of the phrase, not added to the timeline.
+ *
+ * When the song has a melakarta with a gamaka table (Śankarābharaṇam first),
+ * unmarked notes expand to that raga's inter-note anuswaras for the approach
+ * direction. Written `{…}(tag)` clusters and explicit gamaka marks win.
  */
 import type { Song } from "../model/Song.js";
 import { Heading } from "../model/Heading.js";
@@ -24,6 +28,11 @@ import {
   planPitchTransition,
   type TransitionWaypoint,
 } from "./PitchTransition.js";
+import {
+  GAMAKA_MIN_DURATION_SEC,
+  ragaGamakaTable,
+  waypointsForRagaGamaka,
+} from "./RagaGamakas.js";
 
 const DEFAULT_SEMITONE: Readonly<Record<string, number>> = {
   s: 0,
@@ -56,6 +65,10 @@ export type PlannedNote = {
   fromMidi: number | null;
   /** Departure → arrival waypoints (¼ / ¾ split, gravity on leaps). */
   waypoints: TransitionWaypoint[];
+  letter: string;
+  octave: number;
+  /** Written gamaka / cluster — library must not overwrite. */
+  skipLibrary: boolean;
 };
 
 export type DynMark = { volumeLevel: number | null; gamaka: string | null };
@@ -189,6 +202,7 @@ export function planNotes(
               { frac: 1, midi, gainMul: 1 },
             ]
           : planPitchTransition(fromMidi, midi);
+      const skipLibrary = Boolean(c.clusterGamaka) || Boolean(gamaka);
 
       open = {
         startSec: t,
@@ -200,6 +214,9 @@ export function planNotes(
         slideDown,
         fromMidi,
         waypoints,
+        letter: letter!,
+        octave: c.octave,
+        skipLibrary,
       };
       prevMidi = midi;
       openPhraseEnd = c.phraseEnd;
@@ -207,7 +224,45 @@ export function planNotes(
     }
   }
   closeOpen(t, true);
+  applyRagaGamakaLibrary(notes, song, semitones);
   return notes;
+}
+
+function applyRagaGamakaLibrary(
+  notes: PlannedNote[],
+  song: Song,
+  semitones: Map<string, number>,
+): void {
+  const table = ragaGamakaTable(song.melakarta);
+  if (table == null) return;
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i]!;
+    if (n.skipLibrary) continue;
+    const dur = n.endSec - n.startSec;
+    if (dur < GAMAKA_MIN_DURATION_SEC) continue;
+    const prev = i > 0 ? notes[i - 1]! : null;
+    const next = i + 1 < notes.length ? notes[i + 1]! : null;
+    const pts = waypointsForRagaGamaka(
+      table,
+      {
+        letter: n.letter,
+        octave: n.octave,
+        prevLetter: prev?.letter ?? null,
+        prevOctave: prev?.octave ?? null,
+        nextLetter: next?.letter ?? null,
+        nextOctave: next?.octave ?? null,
+        fromMidi: n.fromMidi,
+        midi: n.midi,
+      },
+      semitones,
+    );
+    if (pts != null && pts.length > 0) {
+      n.waypoints = pts;
+      n.kampita = false;
+      n.slideUp = false;
+      n.slideDown = false;
+    }
+  }
 }
 
 function midiToHz(midi: number): number {
