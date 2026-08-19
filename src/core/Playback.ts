@@ -20,6 +20,10 @@ import type { Song } from "../model/Song.js";
 import { Heading } from "../model/Heading.js";
 import { layoutSong, VisualRow, type LayoutItem } from "./Layout.js";
 import { melakartaVariants, VARIANT_SEMITONE } from "./Melakarta.js";
+import {
+  planPitchTransition,
+  type TransitionWaypoint,
+} from "./PitchTransition.js";
 
 const DEFAULT_SEMITONE: Readonly<Record<string, number>> = {
   s: 0,
@@ -48,6 +52,10 @@ export type PlannedNote = {
   kampita: boolean;
   slideUp: boolean;
   slideDown: boolean;
+  /** Previous pitch; used to fill a jaru/traversal into this note. */
+  fromMidi: number | null;
+  /** Departure → arrival waypoints (¼ / ¾ split, gravity on leaps). */
+  waypoints: TransitionWaypoint[];
 };
 
 export type DynMark = { volumeLevel: number | null; gamaka: string | null };
@@ -108,6 +116,7 @@ export function planNotes(
   let t = 0;
   let open: PlannedNote | null = null;
   let openPhraseEnd = false;
+  let afterPhrase = false;
   let level = 2;
   let prevMidi: number | null = null;
   const beat = Math.max(0.05, secondsPerAkshara);
@@ -118,6 +127,7 @@ export function planNotes(
     const gap = applyPhraseGap && openPhraseEnd ? phraseSeparatorGapSec(beat, held) : 0;
     open.endSec = Math.max(open.startSec, at - gap);
     if (open.endSec > open.startSec) notes.push(open);
+    if (applyPhraseGap && openPhraseEnd && gap > 0) afterPhrase = true;
     open = null;
     openPhraseEnd = false;
   };
@@ -170,6 +180,16 @@ export function planNotes(
         if (gl === "sp") slideUp = true;
       }
 
+      const fromMidi = afterPhrase ? null : prevMidi;
+      afterPhrase = false;
+      const waypoints =
+        fromMidi == null
+          ? [
+              { frac: 0, midi, gainMul: 1 },
+              { frac: 1, midi, gainMul: 1 },
+            ]
+          : planPitchTransition(fromMidi, midi);
+
       open = {
         startSec: t,
         endSec: t,
@@ -178,6 +198,8 @@ export function planNotes(
         kampita,
         slideUp,
         slideDown,
+        fromMidi,
+        waypoints,
       };
       prevMidi = midi;
       openPhraseEnd = c.phraseEnd;
@@ -359,7 +381,6 @@ function scheduleNoteVoice(
   stoppables: Stoppable[],
 ): void {
   const dur = Math.max(0.04, n.endSec - n.startSec);
-  const baseHz = midiToHz(n.midi);
   const t0 = startAt + n.startSec;
   const t1 = startAt + n.endSec;
   const peak = (LEVEL_GAIN[n.volumeLevel] ?? LEVEL_GAIN[2]) * 0.9;
@@ -367,19 +388,31 @@ function scheduleNoteVoice(
   // Hold full level until the next note (or rest) starts. A few milliseconds
   // after t1 only avoids a click — it must not eat into this note's duration.
   const release = 0.012;
+  const waypoints = n.waypoints.length > 0 ? n.waypoints : [{ frac: 0, midi: n.midi, gainMul: 1 }, { frac: 1, midi: n.midi, gainMul: 1 }];
 
   const noteGain = ctx.createGain();
   noteGain.gain.setValueAtTime(0.0001, t0);
-  noteGain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + attack);
-  noteGain.gain.setValueAtTime(Math.max(0.0002, peak), t1);
+  const firstPeak = Math.max(0.0002, peak * (waypoints[0]?.gainMul ?? 1));
+  noteGain.gain.exponentialRampToValueAtTime(firstPeak, t0 + attack);
+  for (const w of waypoints) {
+    const tw = t0 + w.frac * dur;
+    if (tw <= t0 + attack) continue;
+    noteGain.gain.linearRampToValueAtTime(Math.max(0.0002, peak * w.gainMul), tw);
+  }
+  noteGain.gain.setValueAtTime(Math.max(0.0002, peak * (waypoints[waypoints.length - 1]?.gainMul ?? 1)), t1);
   noteGain.gain.exponentialRampToValueAtTime(0.0001, t1 + release);
   noteGain.connect(master);
 
   for (const [mult, rel] of instrument.partials) {
     const osc = ctx.createOscillator();
     osc.type = instrument.id === "flute" ? "sine" : instrument.id === "piano" ? "triangle" : "sawtooth";
-    const hz = baseHz * mult;
-    osc.frequency.setValueAtTime(hz, t0);
+    const clickAvoid = 0.008;
+    for (const w of waypoints) {
+      const tw = t0 + w.frac * dur;
+      const hz = midiToHz(w.midi) * mult;
+      if (w.frac === 0) osc.frequency.setValueAtTime(hz, t0);
+      else osc.frequency.linearRampToValueAtTime(hz, Math.max(t0 + clickAvoid, tw));
+    }
 
     if (n.kampita && mult === 1) {
       const depth = n.volumeLevel >= 3 ? 14 : 9;
@@ -393,12 +426,6 @@ function scheduleNoteVoice(
       lfo.start(t0);
       lfo.stop(t1 + release + 0.02);
       stoppables.push(lfo);
-    } else if (n.slideUp && mult === 1) {
-      osc.frequency.setValueAtTime(hz * 0.94, t0);
-      osc.frequency.linearRampToValueAtTime(hz, t0 + Math.min(0.18, dur * 0.4));
-    } else if (n.slideDown && mult === 1) {
-      osc.frequency.setValueAtTime(hz * 1.06, t0);
-      osc.frequency.linearRampToValueAtTime(hz, t0 + Math.min(0.18, dur * 0.4));
     }
 
     const partialGain = ctx.createGain();

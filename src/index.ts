@@ -98,6 +98,17 @@ export {
   DEFAULT_BPM,
 } from "./core/Playback.js";
 export type { PlannedNote, DynMark, PlaybackHandle, Instrument, InstrumentId, PlaySongOptions } from "./core/Playback.js";
+export {
+  planPitchTransition,
+  scalePitchesBetween,
+  rangeIndexFromMadhyaSa,
+  midiFromRangeIndex,
+  TRANSITION_MATRIX_SIZE,
+  EXTENDED_MATRIX_SIZE,
+  TRANSITION_SPLIT,
+  GRAVITY_GAIN,
+} from "./core/PitchTransition.js";
+export type { TransitionWaypoint } from "./core/PitchTransition.js";
 export { defaultMeasureCellWidth } from "./render/SvgScore.js";
 export type { CellWidthMeasurer } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";

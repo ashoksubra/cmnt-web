@@ -40,10 +40,21 @@ import { buildMenubar, type MenuItem } from "./menubar";
 import { createCanvasCellMeasurer } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
-// Public (vite build / GitHub Pages) never shows Play. Local `vite` keeps it
-// so we can work on synthesis. Compile-time: import.meta.env.DEV is replaced.
+function isAudioPlayUnlocked(): boolean {
+  if (import.meta.env.DEV) return true;
+  try {
+    return new URLSearchParams(window.location.search).get("audio") === "1";
+  } catch {
+    return false;
+  }
+}
+
+// Public Pages hides Play. Local `vite` keeps it. `?audio=1` unlocks the
+// public build so we can investigate synthesis without showing Play to visitors.
+const audioPlayUnlocked = isAudioPlayUnlocked();
 document.documentElement.classList.toggle("cmnt-dev", import.meta.env.DEV);
 document.documentElement.classList.toggle("cmnt-public", import.meta.env.PROD);
+document.documentElement.classList.toggle("cmnt-audio-unlock", audioPlayUnlocked);
 
 import smokeAdi from "../fixtures/smoke_adi.txt?raw";
 import smokeAdiTamil from "../fixtures/smoke_adi_tamil.txt?raw";
@@ -190,11 +201,11 @@ function updateSpeedLabel(): void {
 }
 
 function isAudioPlayVisible(): boolean {
-  return import.meta.env.DEV && audioPlayToggle.checked;
+  return audioPlayUnlocked && audioPlayToggle.checked;
 }
 
 function readStoredAudioPlayVisible(): boolean {
-  if (import.meta.env.PROD) return false;
+  if (!audioPlayUnlocked) return false;
   try {
     const raw = localStorage.getItem(AUDIO_PLAY_VISIBLE_KEY);
     if (raw === "0") return false;
@@ -206,7 +217,7 @@ function readStoredAudioPlayVisible(): boolean {
 }
 
 function applyAudioPlayVisible(visible: boolean, persist = true): void {
-  if (import.meta.env.PROD) visible = false;
+  if (!audioPlayUnlocked) visible = false;
   audioPlayToggle.checked = visible;
   playbackBar.hidden = !visible;
   const playMenu = document.querySelector<HTMLElement>("#play-menu");
@@ -215,7 +226,7 @@ function applyAudioPlayVisible(visible: boolean, persist = true): void {
     stopPlayback();
     playbackHandle = null;
   }
-  if (persist && import.meta.env.DEV) {
+  if (persist && audioPlayUnlocked) {
     try {
       localStorage.setItem(AUDIO_PLAY_VISIBLE_KEY, visible ? "1" : "0");
     } catch {
@@ -1262,7 +1273,11 @@ function sampleMenuItems(): MenuItem[] {
 
 async function playFromStart(): Promise<void> {
   if (!isAudioPlayVisible()) {
-    setStatusOk("Turn on Audio play in the toolbar to hear a synthesized sketch");
+    setStatusOk(
+      audioPlayUnlocked
+        ? "Turn on Audio play in the toolbar to hear a synthesized sketch"
+        : "Audio play is hidden on the public site — local vite, or add ?audio=1",
+    );
     return;
   }
   try {
