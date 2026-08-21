@@ -219,9 +219,9 @@ function readStoredAudioPlayVisible(): boolean {
 function applyAudioPlayVisible(visible: boolean, persist = true): void {
   if (!audioPlayUnlocked) visible = false;
   audioPlayToggle.checked = visible;
-  playbackBar.hidden = !visible;
+  playbackBar.hidden = true;
   const playMenu = document.querySelector<HTMLElement>("#play-menu");
-  if (playMenu) playMenu.hidden = !visible;
+  if (playMenu) playMenu.hidden = !audioPlayUnlocked;
   if (!visible) {
     stopPlayback();
     playbackHandle = null;
@@ -233,6 +233,12 @@ function applyAudioPlayVisible(visible: boolean, persist = true): void {
       /* private mode */
     }
   }
+}
+
+function refreshAppMenus(): void {
+  buildAppMenus();
+  const playMenu = document.querySelector<HTMLElement>("#play-menu");
+  if (playMenu) playMenu.hidden = !audioPlayUnlocked;
 }
 
 function populateInstrumentSelect(): void {
@@ -367,7 +373,7 @@ function updateSyntaxHelp(): void {
   syntaxHelp.hidden = true;
 }
 
-const EDITOR_SIZE_KEY = "cmnt.editorPaneSize";
+const EDITOR_SIZE_KEY = "cmnt.editorPaneSize.v2";
 const AUDIO_PLAY_VISIBLE_KEY = "cmnt.audioPlayVisible";
 
 function isStackedLayout(): boolean {
@@ -379,7 +385,7 @@ function applyStoredEditorSize(): void {
     const raw = localStorage.getItem(EDITOR_SIZE_KEY);
     if (raw == null) return;
     const n = Number.parseFloat(raw);
-    if (!Number.isFinite(n) || n < 160) return;
+    if (!Number.isFinite(n) || n < 180) return;
     composerEl.style.setProperty("--editor-size", `${Math.round(n)}px`);
   } catch {
     /* ignore */
@@ -394,8 +400,8 @@ function initPaneSplitter(): void {
     if (!dragging) return;
     const rect = composerEl.getBoundingClientRect();
     const stacked = isStackedLayout();
-    const minEditor = stacked ? 160 : 260;
-    const minPreview = stacked ? 120 : 200;
+    const minEditor = stacked ? 180 : 280;
+    const minPreview = stacked ? 100 : 160;
     const splitter = 6;
     let size: number;
     if (stacked) {
@@ -441,7 +447,7 @@ function initPaneSplitter(): void {
   paneSplitter.addEventListener("keydown", (ev) => {
     const step = ev.shiftKey ? 40 : 16;
     const stacked = isStackedLayout();
-    const cur = Number.parseFloat(getComputedStyle(composerEl).getPropertyValue("--editor-size")) || (stacked ? 280 : 420);
+    const cur = Number.parseFloat(getComputedStyle(composerEl).getPropertyValue("--editor-size")) || (stacked ? 360 : 720);
     let next = cur;
     if (stacked) {
       if (ev.key === "ArrowUp") next = cur - step;
@@ -453,7 +459,7 @@ function initPaneSplitter(): void {
       else return;
     }
     ev.preventDefault();
-    next = Math.max(stacked ? 160 : 260, next);
+    next = Math.max(stacked ? 180 : 280, next);
     composerEl.style.setProperty("--editor-size", `${Math.round(next)}px`);
     try {
       localStorage.setItem(EDITOR_SIZE_KEY, String(Math.round(next)));
@@ -1275,7 +1281,7 @@ async function playFromStart(): Promise<void> {
   if (!isAudioPlayVisible()) {
     setStatusOk(
       audioPlayUnlocked
-        ? "Turn on Audio play in the toolbar to hear a synthesized sketch"
+        ? "Turn on Play → Audio play to hear a synthesized sketch"
         : "Audio play is hidden on the public site — local vite, or add ?audio=1",
     );
     return;
@@ -1350,7 +1356,124 @@ function buildAppMenus(): void {
     { label: "Sanskrit", action: () => insertAtCursor("Language: Sanskrit\n") },
   ];
 
-  buildMenubar(menubarEl, [
+  const uiLangItems: MenuItem[] = (
+    [
+      ["auto", "Auto (from source)"],
+      ["english", "English"],
+      ["tamil", "Tamil"],
+      ["telugu", "Telugu"],
+      ["kannada", "Kannada"],
+      ["sanskrit", "Sanskrit"],
+    ] as const
+  ).map(([id, label]) => ({
+    label,
+    checked: langSelect.value === id,
+    action: () => {
+      langSelect.value = id;
+      clearHeaderOverrides();
+      render();
+      refreshAppMenus();
+    },
+  }));
+
+  const schoolItems: MenuItem[] = SCHOOL_PRESETS.map((preset) => ({
+    label: preset.label,
+    checked: schoolSelect.value === preset.id,
+    action: () => {
+      schoolSelect.value = preset.id;
+      clearHeaderOverrides();
+      applySchool(preset.id);
+      refreshAppMenus();
+    },
+  }));
+
+  const practiceItems: MenuItem[] = [0.5, 0.75, 1, 1.25, 1.5, 2].map((n) => ({
+    label: `${n}×`,
+    checked: Math.abs(currentPlaybackSpeed() - n) < 0.03,
+    action: () => {
+      speedSlider.value = String(n);
+      updateSpeedLabel();
+      refreshAppMenus();
+      setStatusOk(`Practice → ${n}×`);
+    },
+  }));
+
+  const bpmChoices = [48, 60, 72, 80, 96, 120];
+  const bpmItems: MenuItem[] = [
+    ...bpmChoices.map(
+      (n): MenuItem => ({
+        label: `${n}`,
+        checked: currentBpm() === n,
+        action: () => {
+          bpmInput.value = String(n);
+          refreshAppMenus();
+          setStatusOk(`BPM → ${n}${currentClickEnabled() ? " (click on)" : ""}`);
+        },
+      }),
+    ),
+    { separator: true },
+    {
+      label: "Custom…",
+      action: () => {
+        const v = window.prompt("Beats per minute (1 akshara = 1 beat)", String(currentBpm()));
+        if (v == null) return;
+        bpmInput.value = String(clampBpm(Number.parseFloat(v) || currentBpm()));
+        refreshAppMenus();
+        setStatusOk(`BPM → ${currentBpm()}${currentClickEnabled() ? " (click on)" : ""}`);
+      },
+    },
+  ];
+
+  const playItems: MenuItem[] = [
+    {
+      label: "Audio play",
+      checked: audioPlayToggle.checked,
+      action: () => {
+        applyAudioPlayVisible(!audioPlayToggle.checked);
+        setStatusOk(
+          audioPlayToggle.checked
+            ? "Audio play on — experimental sketch, not a finished gamaka model"
+            : "Audio play off",
+        );
+        refreshAppMenus();
+      },
+    },
+  ];
+  if (audioPlayToggle.checked) {
+    playItems.push(
+      { separator: true },
+      { label: "Play from Start", shortcut: `${mod}P`, action: () => void playFromStart() },
+      { label: "Stop", shortcut: `${mod}.`, action: () => stopPlay() },
+      { separator: true },
+      {
+        label: "Click",
+        checked: clickToggle.checked,
+        action: () => {
+          clickToggle.checked = !clickToggle.checked;
+          refreshAppMenus();
+          setStatusOk(currentClickEnabled() ? `Click on @ ${currentBpm()} BPM` : "Click off (silent beat)");
+        },
+      },
+      { label: `BPM: ${currentBpm()}`, submenu: bpmItems },
+      { label: `Practice: ${speedLabel.textContent ?? "1×"}`, submenu: practiceItems },
+      {
+        label: "Instrument",
+        submenu: INSTRUMENTS.map(
+          (inst): MenuItem => ({
+            label: inst.label,
+            checked: instrumentSelect.value === inst.id,
+            action: () => {
+              instrumentSelect.value = inst.id;
+              refreshAppMenus();
+              setStatusOk(`Instrument → ${inst.label}`);
+            },
+          }),
+        ),
+      },
+    );
+  }
+
+  const menus: { label: string; id?: string; items: MenuItem[] }[] = [
     {
       label: "File",
       items: [
@@ -1368,29 +1491,54 @@ function buildAppMenus(): void {
       ],
     },
     {
-      id: "play-menu",
-      label: "Play",
+      label: "View",
       items: [
-        { label: "Play from Start", shortcut: `${mod}P`, action: () => void playFromStart() },
-        { label: "Stop", shortcut: `${mod}.`, action: () => stopPlay() },
+        {
+          label: "Live update",
+          checked: liveUpdateToggle.checked,
+          action: () => {
+            liveUpdateToggle.checked = !liveUpdateToggle.checked;
+            refreshAppMenus();
+            setStatusOk(liveUpdateToggle.checked ? "Live update on" : "Live update off — View → Update Preview");
+          },
+        },
+        { label: "Score language", submenu: uiLangItems },
+        { label: "School", submenu: schoolItems },
         { separator: true },
-        ...INSTRUMENTS.map(
-          (inst): MenuItem => ({
-            label: `Instrument: ${inst.label}`,
-            action: () => {
-              instrumentSelect.value = inst.id;
-              setStatusOk(`Instrument → ${inst.label}`);
-            },
-          }),
-        ),
+        {
+          label: "Raagam display…",
+          action: () => {
+            const v = window.prompt(
+              "Optional CMNT-roman ragam spelling (saved as RaagamDisplay:)",
+              ragamDisplay.value,
+            );
+            if (v == null) return;
+            ragamDisplay.value = v;
+            ragamNameDirty = true;
+            scheduleRender();
+          },
+        },
+        { label: "Save ragam", action: () => applyDisplayNamesToSource(false) },
+        { label: "Clear ragam", action: () => applyDisplayNamesToSource(true) },
+        { label: "Edit Aro/Ava…", action: () => openEditRagaDialog() },
+        {
+          label: `Talam: ${talamDisplay.textContent?.trim() || "—"}`,
+          disabled: true,
+        },
       ],
     },
-    {
-      label: "Insert",
-      items: [
+  ];
+
+  if (audioPlayUnlocked) {
+    menus.push({ id: "play-menu", label: "Play", items: playItems });
+  }
+
+  menus.push({
+    label: "Insert",
+    items: [
         { label: "Gamaka", submenu: gamakaItems },
         { label: "Speed (2nd / 3rd / 4th)", submenu: speedItems },
-        { label: "Language", submenu: languageItems },
+        { label: "Language line", submenu: languageItems },
         { separator: true },
         {
           label: "Raagam Name…",
@@ -1414,7 +1562,7 @@ function buildAppMenus(): void {
           label: "Default Speed…",
           action: () => {
             const v = window.prompt(
-              "Notation DefaultSpeed (0/1/2 — note density for ( ) nesting).\nBPM tempo is set in the playback bar.",
+              "Notation DefaultSpeed (0/1/2 — note density for ( ) nesting).\nBPM tempo is under Play.",
               "0",
             );
             if (v == null || !/^[012]$/.test(v.trim())) return;
@@ -1438,9 +1586,10 @@ function buildAppMenus(): void {
         { separator: true },
         { label: "Subscript Number…", action: () => promptSubscript(true) },
         { label: "Superscript Number…", action: () => promptSubscript(false) },
-      ],
-    },
-  ]);
+    ],
+  });
+
+  buildMenubar(menubarEl, menus);
 }
 
 // ---- Events --------------------------------------------------------------------
@@ -1558,8 +1707,8 @@ populateSchoolSelect();
 populateInstrumentSelect();
 updateSpeedLabel();
 initPaneSplitter();
-buildAppMenus();
 applyAudioPlayVisible(readStoredAudioPlayVisible(), false);
+refreshAppMenus();
 updateDocTitle();
 sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
 currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;
