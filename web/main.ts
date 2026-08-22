@@ -37,6 +37,7 @@ import {
 import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schools";
 import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
 import { buildMenubar, type MenuItem } from "./menubar";
+import { HELP_COMPOSER, HELP_YAML, type HelpTopic } from "./helpTopics";
 import { createCanvasCellMeasurer } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
@@ -125,6 +126,10 @@ const syntaxHelp = document.querySelector<HTMLElement>("#syntax-help")!;
 const syntaxHelpTitle = document.querySelector<HTMLElement>("#syntax-help-title")!;
 const syntaxHelpBody = document.querySelector<HTMLPreElement>("#syntax-help-body")!;
 const syntaxHelpDismiss = document.querySelector<HTMLButtonElement>("#syntax-help-dismiss")!;
+const helpDialog = document.querySelector<HTMLDialogElement>("#help-dialog")!;
+const helpDialogTitle = document.querySelector<HTMLElement>("#help-dialog-title")!;
+const helpDialogBody = document.querySelector<HTMLPreElement>("#help-dialog-body")!;
+const helpDialogClose = document.querySelector<HTMLButtonElement>("#help-dialog-close")!;
 
 let currentSchool: SchoolPreset = schoolById(DEFAULT_SCHOOL_ID);
 /** Once the user edits the ragam field, keep their text until Clear / fixture change. */
@@ -175,7 +180,7 @@ const CLASSIC_SYNTAX_HELP = [
   "Select notes, then Insert → Speed (2nd/3rd/4th) or Insert → Gamaka.",
   "A { sA r s r … }(kh) cluster fills one parent beat; sA is twice a short note.",
   "",
-  "Tip: start with --- for optional YAML front matter (keys lowercase).",
+  "Tip: Help → YAML front matter lists every header key. Start with --- for optional YAML (keys lowercase).",
 ].join("\n");
 
 function currentPlaybackSpeed(): number {
@@ -373,45 +378,51 @@ function updateSyntaxHelp(): void {
   syntaxHelp.hidden = true;
 }
 
-const EDITOR_SIZE_KEY = "cmnt.editorPaneSize.v2";
+const PREVIEW_SIZE_KEY = "cmnt.previewPaneSize.v1";
 const AUDIO_PLAY_VISIBLE_KEY = "cmnt.audioPlayVisible";
 
-function isStackedLayout(): boolean {
-  return window.matchMedia("(max-width: 860px)").matches;
-}
-
-function applyStoredEditorSize(): void {
+function applyStoredPreviewSize(): void {
   try {
-    const raw = localStorage.getItem(EDITOR_SIZE_KEY);
+    const raw = localStorage.getItem(PREVIEW_SIZE_KEY);
     if (raw == null) return;
     const n = Number.parseFloat(raw);
-    if (!Number.isFinite(n) || n < 180) return;
-    composerEl.style.setProperty("--editor-size", `${Math.round(n)}px`);
+    if (!Number.isFinite(n) || n < 100) return;
+    composerEl.style.setProperty("--preview-size", `${Math.round(n)}px`);
   } catch {
     /* ignore */
   }
 }
 
 function initPaneSplitter(): void {
-  applyStoredEditorSize();
+  applyStoredPreviewSize();
   let dragging = false;
+  const minPreview = 100;
+  const minEditor = 200;
+  const splitter = 6;
+
+  const setPreviewSize = (size: number): void => {
+    composerEl.style.setProperty("--preview-size", `${Math.round(size)}px`);
+  };
+
+  const persistPreviewSize = (): void => {
+    const cur = getComputedStyle(composerEl).getPropertyValue("--preview-size").trim();
+    const n = Number.parseFloat(cur);
+    if (!Number.isFinite(n)) return;
+    try {
+      localStorage.setItem(PREVIEW_SIZE_KEY, String(Math.round(n)));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const clampPreviewSize = (size: number, totalHeight: number): number => {
+    return Math.max(minPreview, Math.min(totalHeight - minEditor - splitter, size));
+  };
 
   const onPointerMove = (ev: PointerEvent): void => {
     if (!dragging) return;
     const rect = composerEl.getBoundingClientRect();
-    const stacked = isStackedLayout();
-    const minEditor = stacked ? 180 : 280;
-    const minPreview = stacked ? 100 : 160;
-    const splitter = 6;
-    let size: number;
-    if (stacked) {
-      size = ev.clientY - rect.top;
-      size = Math.max(minEditor, Math.min(rect.height - minPreview - splitter, size));
-    } else {
-      size = ev.clientX - rect.left;
-      size = Math.max(minEditor, Math.min(rect.width - minPreview - splitter, size));
-    }
-    composerEl.style.setProperty("--editor-size", `${Math.round(size)}px`);
+    setPreviewSize(clampPreviewSize(ev.clientY - rect.top, rect.height));
   };
 
   const endDrag = (ev: PointerEvent): void => {
@@ -423,15 +434,7 @@ function initPaneSplitter(): void {
     } catch {
       /* ignore */
     }
-    const cur = getComputedStyle(composerEl).getPropertyValue("--editor-size").trim();
-    const n = Number.parseFloat(cur);
-    if (Number.isFinite(n)) {
-      try {
-        localStorage.setItem(EDITOR_SIZE_KEY, String(Math.round(n)));
-      } catch {
-        /* ignore */
-      }
-    }
+    persistPreviewSize();
   };
 
   paneSplitter.addEventListener("pointerdown", (ev) => {
@@ -446,26 +449,15 @@ function initPaneSplitter(): void {
   paneSplitter.addEventListener("pointercancel", endDrag);
   paneSplitter.addEventListener("keydown", (ev) => {
     const step = ev.shiftKey ? 40 : 16;
-    const stacked = isStackedLayout();
-    const cur = Number.parseFloat(getComputedStyle(composerEl).getPropertyValue("--editor-size")) || (stacked ? 360 : 720);
+    const cur = Number.parseFloat(getComputedStyle(composerEl).getPropertyValue("--preview-size")) || 280;
     let next = cur;
-    if (stacked) {
-      if (ev.key === "ArrowUp") next = cur - step;
-      else if (ev.key === "ArrowDown") next = cur + step;
-      else return;
-    } else {
-      if (ev.key === "ArrowLeft") next = cur - step;
-      else if (ev.key === "ArrowRight") next = cur + step;
-      else return;
-    }
+    if (ev.key === "ArrowUp") next = cur - step;
+    else if (ev.key === "ArrowDown") next = cur + step;
+    else return;
     ev.preventDefault();
-    next = Math.max(stacked ? 180 : 280, next);
-    composerEl.style.setProperty("--editor-size", `${Math.round(next)}px`);
-    try {
-      localStorage.setItem(EDITOR_SIZE_KEY, String(Math.round(next)));
-    } catch {
-      /* ignore */
-    }
+    const rect = composerEl.getBoundingClientRect();
+    setPreviewSize(clampPreviewSize(next, rect.height));
+    persistPreviewSize();
   });
 }
 
@@ -1237,6 +1229,17 @@ function openEditRagaDialog(initialName?: string): void {
   editRagaName.focus();
 }
 
+function openHelpTopic(topic: HelpTopic): void {
+  helpDialogTitle.textContent = topic.title;
+  helpDialogBody.textContent = topic.body;
+  helpDialogBody.scrollTop = 0;
+  if (typeof helpDialog.showModal === "function") {
+    helpDialog.showModal();
+  } else {
+    helpDialog.setAttribute("open", "");
+  }
+}
+
 function saveEditRagaFromForm(): boolean {
   const name = editRagaName.value.trim();
   if (name === "") {
@@ -1589,6 +1592,14 @@ function buildAppMenus(): void {
     ],
   });
 
+  menus.push({
+    label: "Help",
+    items: [
+      { label: "YAML front matter…", action: () => openHelpTopic(HELP_YAML) },
+      { label: "Composer…", action: () => openHelpTopic(HELP_COMPOSER) },
+    ],
+  });
+
   buildMenubar(menubarEl, menus);
 }
 
@@ -1651,6 +1662,7 @@ syntaxHelpDismiss.addEventListener("click", () => {
   syntaxHelpDismissed = true;
   syntaxHelp.hidden = true;
 });
+helpDialogClose.addEventListener("click", () => helpDialog.close());
 openFileInput.addEventListener("change", () => {
   const file = openFileInput.files?.[0];
   if (file) void openFileFromInput(file);

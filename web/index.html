@@ -23,6 +23,21 @@
     </header>
 
     <main class="composer">
+      <section class="preview-pane">
+        <div class="preview-scroll">
+          <div id="score-page" class="score-page"></div>
+        </div>
+      </section>
+
+      <div
+        id="pane-splitter"
+        class="pane-splitter"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize score and source"
+        tabindex="0"
+      ></div>
+
       <section class="editor-pane">
         <div id="app-chrome" class="app-chrome" hidden>
         <div class="toolbar">
@@ -170,6 +185,14 @@
           </form>
         </dialog>
 
+        <dialog id="help-dialog" class="help-dialog">
+          <div class="help-dialog-bar">
+            <h2 id="help-dialog-title">Help</h2>
+            <button type="button" id="help-dialog-close" class="secondary-btn">Close</button>
+          </div>
+          <pre id="help-dialog-body" class="help-dialog-body"></pre>
+        </dialog>
+
         <div id="syntax-help" class="syntax-help" hidden>
           <div class="syntax-help-header">
             <strong id="syntax-help-title">YAML front matter</strong>
@@ -190,21 +213,6 @@
         </div>
 
         <div id="status-line" class="status status-ok">Ready</div>
-      </section>
-
-      <div
-        id="pane-splitter"
-        class="pane-splitter"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize source and score"
-        tabindex="0"
-      ></div>
-
-      <section class="preview-pane">
-        <div class="preview-scroll">
-          <div id="score-page" class="score-page"></div>
-        </div>
       </section>
     </main>
 

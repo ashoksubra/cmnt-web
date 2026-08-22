@@ -199,7 +199,7 @@ body {
 
 /* Fallback if the user prints the main window (File → Export PDF uses a
    dedicated full-score window instead). Unclip every overflow/height so the
-   whole SVG prints, not only the visible right-hand preview viewport. */
+   whole SVG prints, not only the visible preview viewport. */
 @media print {
   html,
   body {
@@ -211,7 +211,8 @@ body {
   .app-header,
   .editor-pane,
   .pane-splitter,
-  .syntax-help {
+  .syntax-help,
+  .help-dialog {
     display: none !important;
   }
   .composer {
@@ -247,22 +248,14 @@ body {
   }
 }
 
-/* ---- composer layout: source (larger) | splitter | score ---- */
+/* ---- composer layout: score (top) / splitter / source (larger, bottom) ---- */
 .composer {
-  --editor-size: 62vw;
+  --preview-size: 38vh;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, var(--editor-size)) 6px minmax(160px, 1fr);
-  grid-template-rows: 1fr;
-}
-
-@media (max-width: 860px) {
-  .composer {
-    --editor-size: 58vh;
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(180px, var(--editor-size)) 6px minmax(120px, 1fr);
-  }
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(100px, var(--preview-size)) 6px minmax(200px, 1fr);
 }
 
 .editor-pane {
@@ -276,7 +269,7 @@ body {
 
 .pane-splitter {
   background: #dbe1ea;
-  cursor: col-resize;
+  cursor: row-resize;
   touch-action: none;
   position: relative;
   z-index: 2;
@@ -285,7 +278,7 @@ body {
 .pane-splitter::after {
   content: "";
   position: absolute;
-  inset: 0 -4px;
+  inset: -4px 0;
 }
 
 .pane-splitter:hover,
@@ -295,25 +288,9 @@ body {
   outline: none;
 }
 
-@media (max-width: 860px) {
-  .pane-splitter {
-    cursor: row-resize;
-  }
-
-  .pane-splitter::after {
-    inset: -4px 0;
-  }
-}
-
 .composer.resizing-panes {
   user-select: none;
-  cursor: col-resize;
-}
-
-@media (max-width: 860px) {
-  .composer.resizing-panes {
-    cursor: row-resize;
-  }
+  cursor: row-resize;
 }
 
 .toolbar {
@@ -438,6 +415,48 @@ body {
 
 .edit-raga-dialog::backdrop {
   background: rgba(15, 23, 42, 0.35);
+}
+
+.help-dialog {
+  border: 1px solid #cbd2d9;
+  border-radius: 10px;
+  padding: 0;
+  width: min(720px, 94vw);
+  max-height: min(80vh, 900px);
+  background: #ffffff;
+  color: #1f2933;
+  box-shadow: 0 12px 40px rgba(20, 33, 61, 0.18);
+}
+
+.help-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.help-dialog-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #e4e9f0;
+}
+
+.help-dialog-bar h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #14213d;
+}
+
+.help-dialog-body {
+  margin: 0;
+  padding: 12px 16px 18px;
+  max-height: calc(min(80vh, 900px) - 56px);
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #1f2933;
 }
 
 .edit-raga-form {
