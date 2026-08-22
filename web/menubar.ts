@@ -9,6 +9,8 @@ export type MenuAction = {
   /** Keyboard shortcut hint shown in the menu (handler is wired separately). */
   shortcut?: string;
   disabled?: boolean;
+  /** When set, the item is checkable; true shows a leading mark. */
+  checked?: boolean;
   action?: () => void;
 };
 
@@ -53,11 +55,16 @@ export function buildMenubar(
     root.appendChild(wrap);
   }
 
-  document.addEventListener("click", () => closeAll(root));
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") closeAll(root);
-  });
+  if (!boundMenubars.has(root)) {
+    boundMenubars.add(root);
+    document.addEventListener("click", () => closeAll(root));
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") closeAll(root);
+    });
+  }
 }
+
+const boundMenubars = new WeakSet<HTMLElement>();
 
 function closeAll(root: HTMLElement): void {
   // Only top-level panels — do not stamp [hidden] onto nested accordion bodies
@@ -120,8 +127,11 @@ function populatePanel(panel: HTMLElement, items: MenuItem[], onPick: () => void
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "menu-item";
+    if (item.checked != null) btn.classList.add("menu-item-checkable");
+    if (item.checked) btn.classList.add("is-checked");
     if (item.disabled) btn.disabled = true;
-    btn.innerHTML = `<span>${escapeHtml(item.label)}</span>${
+    const check = item.checked != null ? `<span class="menu-check">${item.checked ? "✓" : ""}</span>` : "";
+    btn.innerHTML = `${check}<span>${escapeHtml(item.label)}</span>${
       item.shortcut ? `<span class="menu-shortcut">${escapeHtml(item.shortcut)}</span>` : ""
     }`;
     btn.addEventListener("click", (ev) => {

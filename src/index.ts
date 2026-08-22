@@ -109,6 +109,15 @@ export {
   GRAVITY_GAIN,
 } from "./core/PitchTransition.js";
 export type { TransitionWaypoint } from "./core/PitchTransition.js";
+export {
+  parseGamakaPattern,
+  waypointsFromGamaka,
+  ragaGamakaTable,
+  lookupGamakaPattern,
+  swaraStayiKey,
+  SANKARABHARANAM_GAMAKAS,
+} from "./core/RagaGamakas.js";
+export type { GamakaAtom, RagaGamakaTable, GamakaContext } from "./core/RagaGamakas.js";
 export { defaultMeasureCellWidth } from "./render/SvgScore.js";
 export type { CellWidthMeasurer } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
