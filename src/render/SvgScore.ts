@@ -1,12 +1,10 @@
 /**
  * Pure layout-items -> SVG string renderer (Path A, Iteration 2 MVP).
  *
- * Deliberately simplified vs. the desktop JAR's `NotationCanvas` (see
- * `CMNT-Notation-Studio-source/src/cmnt/ui/NotationCanvas.java`): no font-metric
- * measurement (Graphics2D isn't available outside a browser/canvas), so cell
- * widths are estimated from akshara duration plus fixed widths for markers/gaps.
- * Visual styling (colors, fonts, sizes) is left to CSS custom properties on the
- * root `.cmnt-score` element so themes can be swapped without re-rendering.
+ * Cell widths can use an optional canvas `measureText` hook (browser). Glyphs
+ * are centered in each cell with SVG `text-anchor="middle"`, which uses the
+ * font's advance width — the same quantity the JAR's FontMetrics.stringWidth
+ * used to center swaras, lyrics, and octave dots.
  */
 import type { Cell, LayoutItem, VisualRow } from "../core/Layout.js";
 import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
@@ -62,10 +60,38 @@ export type SvgScoreOptions = {
    * are duration-weighted estimates only.
    */
   measureCellWidth?: CellWidthMeasurer;
+  /**
+   * Optional per-glyph advance + ink box (canvas FontMetrics). Used to sit
+   * octave dots on the letter's ink, not a guessed offset from the cell edge.
+   */
+  measureGlyph?: GlyphMeasurer;
 };
 
 /** Measures one layout cell's natural width in px. */
 export type CellWidthMeasurer = (cell: Cell, unitWidthScale: number) => number;
+
+/** Canvas/FontMetrics-style glyph box, in px, for a string drawn at x=0 (start). */
+export type GlyphMetrics = {
+  /** Horizontal advance (stringWidth). */
+  advance: number;
+  /** Leftmost ink x when the string is drawn at x=0. Often slightly negative. */
+  inkMin: number;
+  /** Rightmost ink x when the string is drawn at x=0. */
+  inkMax: number;
+};
+
+export type GlyphMeasurer = (text: string, role: "swara" | "lyric" | "gamaka") => GlyphMetrics | null;
+
+/**
+ * Horizontal center of the glyph's ink when the string is drawn with
+ * `text-anchor="middle"` at `cellCx`. Falls back to the advance midpoint.
+ */
+export function glyphInkCenter(cellCx: number, m: GlyphMetrics | null | undefined): number {
+  if (m == null || !(m.advance > 0)) return cellCx;
+  const inkWidth = m.inkMax - m.inkMin;
+  if (!(inkWidth > 0)) return cellCx;
+  return cellCx - m.advance / 2 + (m.inkMin + m.inkMax) / 2;
+}
 
 /** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
 function languageScript(language: string | null | undefined, forceScript: Script | undefined): Script {
@@ -136,7 +162,7 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
       y += 22;
     } else {
       const widths = alignedWidths.get(item) ?? item.cells.map((c) => measure(c, unitWidthScale));
-      const res = renderRow(item, marginX, y, options.forceScript, widths, rowSpacingScale);
+      const res = renderRow(item, marginX, y, options.forceScript, widths, rowSpacingScale, options.measureGlyph);
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     }
@@ -520,6 +546,7 @@ function renderRow(
   forceScript: Script | undefined,
   widths: number[],
   rowSpacingScale = 1,
+  measureGlyph?: GlyphMeasurer,
 ): { svg: string; nextY: number } {
   const script = languageScript(row.language, forceScript);
   const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
@@ -558,7 +585,6 @@ function renderRow(
   // Sangathi numbers ("1." / "2.") sit in the left gutter; every row — numbered
   // or not — starts note content at the same x so continuations stay left-aligned.
   let x = marginX + ROW_LABEL_GUTTER;
-  const notePad = 2; // left pad inside a swara cell (text-anchor=start)
   let speedGroupStart = -1;
   let speedGroupEnd = -1;
   let speedGroupLevel = 0;
@@ -567,8 +593,10 @@ function renderRow(
   for (let i = 0; i < row.cells.length; i++) {
     const c = row.cells[i]!;
     const w = widths[i]!;
+    // Cell midpoint. SVG `text-anchor="middle"` uses the glyph's advance width
+    // (JAR FontMetrics.stringWidth). Octave dots then shift to the ink-box
+    // center when a GlyphMeasurer is provided.
     const cx = x + w / 2;
-    const noteX = x + notePad;
 
     if (c.kind === "swara") {
       const lvl = c.speedLines();
@@ -597,14 +625,14 @@ function renderRow(
     } else if (c.kind === "swara" && c.text !== "") {
       const swaraDisplay = transliterateSwara(c.text, script);
       parts.push(
-        `<text class="cmnt-swara"${swaraStyle} x="${fmt(noteX)}" y="${fmt(baselineY)}" text-anchor="start">${escapeXml(swaraDisplay)}</text>`,
+        `<text class="cmnt-swara"${swaraStyle} x="${fmt(cx)}" y="${fmt(baselineY)}" text-anchor="middle">${escapeXml(swaraDisplay)}</text>`,
       );
 
       if (c.octave !== 0) {
         const dotSize = Math.max(3, swaraSize * 0.22);
         const dotTopY = c.octave > 0 ? baselineY - swaraSize - octaveGap : baselineY + octaveGap * 0.4;
-        // Dot above the left-aligned glyph, not the stretched cell center.
-        const dotCx = noteX + Math.max(dotSize, swaraSize * 0.35);
+        const metrics = measureGlyph?.(swaraDisplay, "swara") ?? null;
+        const dotCx = glyphInkCenter(cx, metrics);
         parts.push(
           `<circle class="cmnt-octave" cx="${fmt(dotCx)}" cy="${fmt(dotTopY + dotSize / 2)}" r="${fmt(dotSize / 2)}" />`,
         );
@@ -612,26 +640,25 @@ function renderRow(
 
       if (c.gamaka != null && c.gamaka !== "") {
         parts.push(
-          `<text class="cmnt-gamaka"${gamakaStyle} x="${fmt(noteX)}" y="${fmt(baselineY - swaraSize - octaveGap - gamakaGap)}" text-anchor="start">${escapeXml(c.gamaka)}</text>`,
+          `<text class="cmnt-gamaka"${gamakaStyle} x="${fmt(cx)}" y="${fmt(baselineY - swaraSize - octaveGap - gamakaGap)}" text-anchor="middle">${escapeXml(c.gamaka)}</text>`,
         );
       }
 
       if (c.phraseEnd) {
         // Center the bold "-" halfway between this note and the next note
         // (e.g. in "p- sA", midway between p and sA — not hugging sA).
-        let nextNoteX: number | null = null;
+        let nextNoteCx: number | null = null;
         let scanX = x + w;
         for (let j = i + 1; j < row.cells.length; j++) {
           const n = row.cells[j]!;
           const nw = widths[j]!;
           if (n.kind === "swara" && n.text !== "") {
-            nextNoteX = scanX + notePad;
+            nextNoteCx = scanX + nw / 2;
             break;
           }
           scanX += nw;
         }
-        const markX =
-          nextNoteX != null ? (noteX + nextNoteX) / 2 : x + w / 2;
+        const markX = nextNoteCx != null ? (cx + nextNoteCx) / 2 : cx;
         parts.push(
           `<text class="cmnt-phrase-break" x="${fmt(markX)}" y="${fmt(baselineY)}" text-anchor="middle">-</text>`,
         );
@@ -646,7 +673,7 @@ function renderRow(
         const lyricDisplay = transliterate(lyric, script, wordStart);
         const lineY = baselineY + swaraToLyric + li * lyricLineHeight;
         parts.push(
-          `<text class="cmnt-lyric"${lyricStyle} x="${fmt(noteX)}" y="${fmt(lineY)}" text-anchor="start">${escapeXml(lyricDisplay)}</text>`,
+          `<text class="cmnt-lyric"${lyricStyle} x="${fmt(cx)}" y="${fmt(lineY)}" text-anchor="middle">${escapeXml(lyricDisplay)}</text>`,
         );
       }
     }

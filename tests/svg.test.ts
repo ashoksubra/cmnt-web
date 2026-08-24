@@ -34,6 +34,28 @@ describe("renderScoreSvg", () => {
     expect(svg).toMatch(/class="cmnt-marker"[^>]*>\|</);
   });
 
+  it("centers octave dots on the swara glyph (advance-width midpoint)", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s' r` g m\nL: sa ri ga ma\n");
+    const svg = renderScoreSvg(layoutSong(song));
+
+    const swaras = [...svg.matchAll(/<text class="cmnt-swara"[^>]*\bx="([^"]+)"[^>]*>/g)].map((m) => m[1]);
+    const dots = [...svg.matchAll(/<circle class="cmnt-octave" cx="([^"]+)"/g)].map((m) => m[1]);
+    expect(dots.length).toBe(2);
+    expect(swaras[0]).toBe(dots[0]);
+    expect(swaras[1]).toBe(dots[1]);
+    expect(svg).toMatch(/class="cmnt-swara"[^>]*text-anchor="middle"/);
+  });
+
+  it("places the octave dot on the glyph ink-box center when metrics are given", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s'\n");
+    const metrics = { advance: 10, inkMin: 2, inkMax: 10 };
+    const svg = renderScoreSvg(layoutSong(song), { measureGlyph: () => metrics });
+    const swaraX = Number(svg.match(/<text class="cmnt-swara"[^>]*\bx="([^"]+)"/)?.[1]);
+    const dotCx = Number(svg.match(/<circle class="cmnt-octave" cx="([^"]+)"/)?.[1]);
+    expect(Number.isFinite(swaraX)).toBe(true);
+    expect(dotCx).toBeCloseTo(swaraX - 5 + 6, 5);
+  });
+
   it("renders octave markers, lyrics, and multiple rows for maha_ganapatim", () => {
     const svg = renderFixture("maha_ganapatim.txt");
 
