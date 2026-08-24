@@ -38,7 +38,7 @@ import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schoo
 import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
 import { buildMenubar, type MenuItem } from "./menubar";
 import { HELP_COMPOSER, HELP_YAML, type HelpTopic } from "./helpTopics";
-import { createCanvasCellMeasurer } from "./canvasMeasure";
+import { createCanvasMetrics } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
 function isAudioPlayUnlocked(): boolean {
@@ -575,7 +575,7 @@ function renderScoreAtWidth(
     ? parse(sourceInput.value, { live: true, caretLine: caretLineNumber() })
     : parse(sourceInput.value);
   const unitWidthScale = currentSchool.density.unitWidthScale;
-  const measureCellWidth = createCanvasCellMeasurer({ forceScript });
+  const { measureCellWidth, measureGlyph } = createCanvasMetrics({ forceScript });
   // Cycle-fit only (JAR layoutFittingLetter). Do not mid-wrap cells — short
   // fragments get full-width stretched and look orphaned in PDF.
   const items = layoutSongFitting(song, {
@@ -592,6 +592,7 @@ function renderScoreAtWidth(
       ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
     },
     measureCellWidth,
+    measureGlyph,
   });
   return { svg, items, forceScript, warnings: song.parseWarnings };
 }
@@ -910,7 +911,7 @@ function buildLetterPdfPages(): string[] | null {
     const song = parse(sourceInput.value);
     const unitWidthScale = currentSchool.density.unitWidthScale;
     const rowSpacingScale = currentSchool.density.rowSpacingScale;
-    const measureCellWidth = createCanvasCellMeasurer({ forceScript });
+    const { measureCellWidth, measureGlyph } = createCanvasMetrics({ forceScript });
     const items = layoutSongFitting(song, {
       targetWidth: Math.max(50, LETTER_CONTENT_WIDTH - ROW_LABEL_GUTTER),
       unitWidthScale,
@@ -934,6 +935,7 @@ function buildLetterPdfPages(): string[] | null {
           ragaRoman: ragamNameDirty ? ragamDisplay.value : loadedRagaRoman || undefined,
         },
         measureCellWidth,
+        measureGlyph,
       });
       const decorated = decorateSvgMarkup(raw);
       if (decorated == null) return null;
