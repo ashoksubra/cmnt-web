@@ -145,8 +145,8 @@ export const HELP_COMPOSER: HelpTopic = {
     "MENUS",
     "  File     New / Open / Save / Save As, Update Preview, samples, export SVG/PNG/PDF",
     "  View     Live update, score language, school, ragam display, Edit Aro/Ava",
-    "  Play     Local vite, or public site with ?audio=1. BPM, click, instrument,",
-    "           practice speed, Play, Stop. Hidden on the public Pages build.",
+    "  Play     Local vite, or public site with ?audio=1. BPM, click, Pitch (Sa),",
+    "           instrument, practice speed, Play, Stop. Hidden on the public Pages build.",
     "  Insert   Gamaka marks, 2nd/3rd/4th speed, Language: line, Raagam/Tala,",
     "           headings, S: / L: templates",
     "  Help     YAML parameter reference and this overview",
@@ -173,7 +173,8 @@ export const HELP_COMPOSER: HelpTopic = {
     "",
     "AUDIO (experimental)",
     "  Practice sketch, not a finished gamaka model. Unlocked in npm run dev and",
-    "  with ?audio=1 on Pages. Public visitors do not see Play.",
+    "  with ?audio=1 on Pages. Public visitors do not see Play. Pitch (Sa) sets the",
+    "  tonic (default C4); the rest of the sketch shifts with it.",
   ].join("\n"),
 };
 

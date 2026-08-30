@@ -6,8 +6,8 @@
  * font's advance width — the same quantity the JAR's FontMetrics.stringWidth
  * used to center swaras, lyrics, and octave dots.
  */
-import type { Cell, LayoutItem, VisualRow } from "../core/Layout.js";
-import { VisualBreak, VisualHeading, VisualPageBreak } from "../core/Layout.js";
+import type { Cell, LayoutItem } from "../core/Layout.js";
+import { VisualBreak, VisualHeading, VisualPageBreak, VisualRow } from "../core/Layout.js";
 import type { Heading } from "../model/Heading.js";
 import type { Script } from "../core/Translit.js";
 import { scriptFor, transliterate, transliterateHeading, transliterateSwara } from "../core/Translit.js";
@@ -133,7 +133,8 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
   const body: string[] = [];
   let y = marginTop;
 
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
     if (item instanceof VisualHeading) {
       const res = renderHeading(
         item.heading,
@@ -162,7 +163,22 @@ export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {
       y += 22;
     } else {
       const widths = alignedWidths.get(item) ?? item.cells.map((c) => measure(c, unitWidthScale));
-      const res = renderRow(item, marginX, y, options.forceScript, widths, rowSpacingScale, options.measureGlyph);
+      const followingRows: VisualRow[] = [];
+      for (let k = i + 1; k < items.length; k++) {
+        const next = items[k];
+        if (!(next instanceof VisualRow)) break;
+        followingRows.push(next);
+      }
+      const res = renderRow(
+        item,
+        marginX,
+        y,
+        options.forceScript,
+        widths,
+        rowSpacingScale,
+        options.measureGlyph,
+        followingRows,
+      );
       if (res.svg) body.push(res.svg);
       y = res.nextY;
     }
@@ -539,6 +555,34 @@ function renderClusterBracket(
 
 const BLANK_LYRICS = new Set(["", ".", "-", "_", " "]);
 
+/** Next non-blank lyric that continues this word (skips markers, rests, and karvai). */
+function nextSameWordLyric(
+  row: VisualRow,
+  cellIndex: number,
+  lyricLine: number,
+  followingRows: VisualRow[] = [],
+): string | null {
+  const rows = [row, ...followingRows];
+  for (let r = 0; r < rows.length; r++) {
+    const cells = rows[r]!.cells;
+    const start = r === 0 ? cellIndex + 1 : 0;
+    for (let j = start; j < cells.length; j++) {
+      const n = cells[j]!;
+      if (n.kind !== "swara") continue;
+      const lyric = lyricLine < n.lyrics.length ? n.lyrics[lyricLine]! : "";
+      const blank = BLANK_LYRICS.has(lyric) || lyric.trim() === "";
+      if (blank) {
+        if (n.isSustain || n.isRest) continue;
+        return null;
+      }
+      const ws = lyricLine < n.lyricWordStart.length ? n.lyricWordStart[lyricLine]! : true;
+      if (ws) return null;
+      return lyric;
+    }
+  }
+  return null;
+}
+
 function renderRow(
   row: VisualRow,
   marginX: number,
@@ -547,6 +591,7 @@ function renderRow(
   widths: number[],
   rowSpacingScale = 1,
   measureGlyph?: GlyphMeasurer,
+  followingRows: VisualRow[] = [],
 ): { svg: string; nextY: number } {
   const script = languageScript(row.language, forceScript);
   const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
@@ -670,7 +715,8 @@ function renderRow(
         const wordStart = li < c.lyricWordStart.length ? c.lyricWordStart[li]! : true;
         // Match JAR NotationCanvas: per-note lyrics go through transliterate(),
         // not transliterateText(), so @/!/~n/#n markers stay on the syllable.
-        const lyricDisplay = transliterate(lyric, script, wordStart);
+        const nextLyric = nextSameWordLyric(row, i, li, followingRows);
+        const lyricDisplay = transliterate(lyric, script, wordStart, nextLyric);
         const lineY = baselineY + swaraToLyric + li * lyricLineHeight;
         parts.push(
           `<text class="cmnt-lyric"${lyricStyle} x="${fmt(cx)}" y="${fmt(lineY)}" text-anchor="middle">${escapeXml(lyricDisplay)}</text>`,

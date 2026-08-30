@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  firstConsonantKey,
   scriptFor,
   transliterate,
   transliterateSwara,
@@ -89,6 +90,27 @@ describe("transliterate (Tamil nasals — matches JAR)", () => {
 
   it("uses alveolar ன் in bare clusters otherwise (janyam)", () => {
     expect(transliterate("janyam", "tamil")).toBe("ஜன்யம்");
+  });
+
+  it("keeps dental ந் when a word is split across notes (kan + dan)", () => {
+    expect(transliterate("kan", "tamil", true, "dan")).toBe("கந்");
+    expect(transliterate("dan", "tamil", false)).toBe("தன்");
+    expect(transliterate("mun", "tamil", true, "thai")).toBe("முந்");
+    expect(transliterate("thai", "tamil", false)).toBe("தை");
+    expect(transliterate("pan", "tamil", true, "dam")).toBe("பந்");
+    expect(transliterate("dam", "tamil", false)).toBe("தம்");
+    expect(transliterate("jan", "tamil", true, "yam")).toBe("ஜன்");
+  });
+
+  it("keeps alveolar ன் when the split syllable has no following token", () => {
+    expect(transliterate("kan", "tamil", true)).toBe("கன்");
+    expect(transliterate("kan", "tamil", true, null)).toBe("கன்");
+  });
+
+  it("reads the first consonant of the next syllable", () => {
+    expect(firstConsonantKey("dan")).toBe("d");
+    expect(firstConsonantKey("thai")).toBe("th");
+    expect(firstConsonantKey("yam")).toBe("y");
   });
 
   it("strips markers for english/null script", () => {

@@ -47,7 +47,8 @@ const DEFAULT_SEMITONE: Readonly<Record<string, number>> = {
 const ARO_TOKEN = /([RGMDNrgmdn])([123])/g;
 const VOLUME_TAG = /v([123])/i;
 
-const TONIC_MIDI = 60;
+/** Middle-C Sa (kattai 1). UI pitch shifts this. */
+export const DEFAULT_TONIC_MIDI = 60;
 /** Reference duration when BPM = 60 (1 akshara = 1 beat = 1 second). */
 export const DEFAULT_BPM = 60;
 const SECONDS_PER_AKSHARA_AT_60 = 60 / DEFAULT_BPM; // 1.0
@@ -122,7 +123,9 @@ export function planNotes(
   song: Song,
   items?: LayoutItem[],
   secondsPerAkshara: number = SECONDS_PER_AKSHARA_AT_60,
+  tonicMidi: number = DEFAULT_TONIC_MIDI,
 ): PlannedNote[] {
+  const tonic = clampTonicMidi(tonicMidi);
   const semitones = semitoneMapForSong(song);
   const layout = items ?? layoutSong(song);
   const notes: PlannedNote[] = [];
@@ -172,7 +175,7 @@ export function planNotes(
         continue;
       }
 
-      const midi = TONIC_MIDI + semi + 12 * c.octave;
+      const midi = tonic + semi + 12 * c.octave;
       const dyn = parseDynMark(c.gamaka);
       let gamaka = dyn.gamaka;
 
@@ -367,6 +370,11 @@ export type PlaySongOptions = {
   speed?: number;
   /** Instrument voice (default Shehnai). */
   instrument?: InstrumentId | string;
+  /**
+   * MIDI note for madhya Sa. Default {@link DEFAULT_TONIC_MIDI} (C4 = 60).
+   * Shift to raise/lower the whole sketch (sruti / kattai).
+   */
+  tonicMidi?: number;
 };
 
 /** Clamp UI BPM into a practical singing/practice range. */
@@ -379,6 +387,12 @@ export function clampBpm(bpm: number): number {
 export function clampPlaybackSpeed(speed: number): number {
   if (!Number.isFinite(speed)) return 1;
   return Math.min(2.5, Math.max(0.4, speed));
+}
+
+/** Clamp Sa (tonic) MIDI into C2–C6. */
+export function clampTonicMidi(midi: number): number {
+  if (!Number.isFinite(midi)) return DEFAULT_TONIC_MIDI;
+  return Math.min(84, Math.max(36, Math.round(midi)));
 }
 
 /**
@@ -516,7 +530,8 @@ export async function playSong(song: Song, opts: PlaySongOptions = {}): Promise<
   const practice = clampPlaybackSpeed(opts.speed ?? 1);
   const secondsPerAkshara = (60 / bpm) / practice;
   const instrument = instrumentById(opts.instrument);
-  const notes = planNotes(song, undefined, secondsPerAkshara);
+  const tonicMidi = clampTonicMidi(opts.tonicMidi ?? DEFAULT_TONIC_MIDI);
+  const notes = planNotes(song, undefined, secondsPerAkshara, tonicMidi);
 
   const master = ctx.createGain();
   master.gain.value = 0.8;

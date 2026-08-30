@@ -231,6 +231,16 @@ function nextConsonantKey(units: Unit[], fromIndex: number): string | null {
   return null;
 }
 
+/** First consonant key of a lyric token (e.g. "dan" → "d", "thai" → "th"). */
+export function firstConsonantKey(roman: string | null | undefined): string | null {
+  if (roman == null) return null;
+  let s = roman.trim();
+  if (s === "") return null;
+  if (s.startsWith("@") || s.startsWith("!")) s = s.substring(1);
+  if (s === "n") s = "ni";
+  return nextConsonantKey(parseSyllable(s), 0);
+}
+
 // ---- per-script letter tables ------------------------------------------------
 const INDEP_VOWEL: Record<ScriptKey, Record<string, string>> = {
   sanskrit: {
@@ -602,8 +612,16 @@ function stripTransliterationMarkers(s: string): string {
  *   word. Only affects Tamil: plain "n" renders as dental ந at the start of a
  *   word and alveolar ன everywhere else (a distinction Tamil makes that the
  *   other supported scripts don't).
+ * @param followingRoman the next lyric token of the *same word* when notation
+ *   splits a word across notes (`kan` + `dan` for கந்தன்). A trailing bare "n"
+ *   then sees the following dental stop and stays ந், not ன்.
  */
-export function transliterate(roman: string, script: Script, wordStart = true): string {
+export function transliterate(
+  roman: string,
+  script: Script,
+  wordStart = true,
+  followingRoman?: string | null,
+): string {
   if (roman == null || roman === "") return roman;
   // No target script means English/roman output -- the @/!/~n/#n markers only mean
   // something when transliterating into an Indic script (word-start override, bare
@@ -649,7 +667,8 @@ export function transliterate(roman: string, script: Script, wordStart = true): 
       atStart = false;
       prevKey = u.c;
     } else if (u.kind === "bareCons") {
-      const nextKey = nextConsonantKey(units, i + 1);
+      let nextKey = nextConsonantKey(units, i + 1);
+      if (nextKey == null && followingRoman) nextKey = firstConsonantKey(followingRoman);
       out += consonantGlyph(script, cons, u.c, atStart, true, nextKey, prevKey) + virama;
       atStart = false;
       prevKey = u.c;

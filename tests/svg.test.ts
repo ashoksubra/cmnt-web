@@ -68,6 +68,26 @@ describe("renderScoreSvg", () => {
     expect(markerCount).toBeGreaterThan(1);
   });
 
+  it("uses dental ந் when Tamil lyrics split a word across notes", () => {
+    const song = parse(
+      [
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: Tamil",
+        "S: s r g m",
+        "L: kan dan mun thai",
+        "",
+      ].join("\n"),
+    );
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).toContain("கந்");
+    expect(svg).toContain("தன்");
+    expect(svg).toContain("முந்");
+    expect(svg).toContain("தை");
+    expect(svg).not.toContain("கன்");
+    expect(svg).not.toContain("முன்");
+  });
+
   it("escapes special XML characters in text content", () => {
     const song = parse('Heading: "Tom & Jerry <live>"\nTala: Adi\nS: s r g m\n');
     const svg = renderScoreSvg(layoutSong(song));

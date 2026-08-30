@@ -53,6 +53,7 @@ export {
   transliterateSwara,
   transliterateText,
   transliterateHeading,
+  firstConsonantKey,
 } from "./core/Translit.js";
 export type { Script } from "./core/Translit.js";
 export {
@@ -94,8 +95,10 @@ export {
   instrumentById,
   clampBpm,
   clampPlaybackSpeed,
+  clampTonicMidi,
   phraseSeparatorGapSec,
   DEFAULT_BPM,
+  DEFAULT_TONIC_MIDI,
 } from "./core/Playback.js";
 export type { PlannedNote, DynMark, PlaybackHandle, Instrument, InstrumentId, PlaySongOptions } from "./core/Playback.js";
 export {
