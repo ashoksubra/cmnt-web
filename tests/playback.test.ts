@@ -7,7 +7,9 @@ import {
   clampPlaybackSpeed,
   phraseSeparatorGapSec,
   clampBpm,
+  clampTonicMidi,
   DEFAULT_BPM,
+  DEFAULT_TONIC_MIDI,
   INSTRUMENTS,
   instrumentById,
 } from "@cmnt/core/Playback";
@@ -27,8 +29,22 @@ describe("planNotes", () => {
     );
     const notes = planNotes(song);
     expect(notes.length).toBeGreaterThanOrEqual(4);
-    expect(notes[0]!.midi).toBe(60); // Sa = middle C
+    expect(notes[0]!.midi).toBe(DEFAULT_TONIC_MIDI); // Sa = middle C
     expect(notes.every((n) => n.endSec > n.startSec)).toBe(true);
+  });
+
+  it("shifts Sa when tonicMidi is set", () => {
+    const song = parse(
+      ["Tala: Adi", "DefaultSpeed: 0", "Language: English", "S: s r g m", "L: sa ri ga ma", ""].join("\n"),
+    );
+    const atC = planNotes(song, undefined, 1);
+    const atD = planNotes(song, undefined, 1, 62);
+    expect(atC[0]!.midi).toBe(60);
+    expect(atD[0]!.midi).toBe(62);
+    expect(atD[1]!.midi - atC[1]!.midi).toBe(2);
+    expect(clampTonicMidi(12)).toBe(36);
+    expect(clampTonicMidi(90)).toBe(84);
+    expect(clampTonicMidi(Number.NaN)).toBe(DEFAULT_TONIC_MIDI);
   });
 
   it("uses melakarta variants when Melakarta is set", () => {

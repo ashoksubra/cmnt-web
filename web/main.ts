@@ -29,6 +29,8 @@ import {
   INSTRUMENTS,
   clampBpm,
   clampPlaybackSpeed,
+  clampTonicMidi,
+  DEFAULT_TONIC_MIDI,
   playSong,
   stopPlayback,
   type InstrumentId,
@@ -98,6 +100,7 @@ const audioPlayToggle = document.querySelector<HTMLInputElement>("#audio-play-to
 const playbackBar = document.querySelector<HTMLElement>(".playback-bar")!;
 const renderBtn = document.querySelector<HTMLButtonElement>("#render-btn")!;
 const instrumentSelect = document.querySelector<HTMLSelectElement>("#instrument-select")!;
+const tonicSelect = document.querySelector<HTMLSelectElement>("#tonic-select")!;
 const bpmInput = document.querySelector<HTMLInputElement>("#bpm-input")!;
 const clickToggle = document.querySelector<HTMLInputElement>("#click-toggle")!;
 const speedSlider = document.querySelector<HTMLInputElement>("#speed-slider")!;
@@ -199,6 +202,19 @@ function currentInstrumentId(): InstrumentId {
   return (instrumentSelect.value || "shehnai") as InstrumentId;
 }
 
+const PITCH_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"] as const;
+const TONIC_MIDI_MIN = 48; // C3
+const TONIC_MIDI_MAX = 72; // C5
+
+function midiPitchLabel(midi: number): string {
+  const n = clampTonicMidi(midi);
+  return `${PITCH_NAMES[n % 12]!}${Math.floor(n / 12) - 1}`;
+}
+
+function currentTonicMidi(): number {
+  return clampTonicMidi(Number.parseInt(tonicSelect.value, 10) || DEFAULT_TONIC_MIDI);
+}
+
 function updateSpeedLabel(): void {
   const s = currentPlaybackSpeed();
   const text = Number.isInteger(s) ? String(s) : s.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
@@ -255,6 +271,37 @@ function populateInstrumentSelect(): void {
     instrumentSelect.appendChild(opt);
   }
   instrumentSelect.value = "shehnai";
+}
+
+function readStoredTonicMidi(): number {
+  try {
+    const raw = localStorage.getItem(TONIC_MIDI_KEY);
+    if (raw == null) return DEFAULT_TONIC_MIDI;
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n)) return DEFAULT_TONIC_MIDI;
+    return clampTonicMidi(Math.min(TONIC_MIDI_MAX, Math.max(TONIC_MIDI_MIN, n)));
+  } catch {
+    return DEFAULT_TONIC_MIDI;
+  }
+}
+
+function persistTonicMidi(midi: number): void {
+  try {
+    localStorage.setItem(TONIC_MIDI_KEY, String(clampTonicMidi(midi)));
+  } catch {
+    /* private mode */
+  }
+}
+
+function populateTonicSelect(): void {
+  tonicSelect.innerHTML = "";
+  for (let midi = TONIC_MIDI_MIN; midi <= TONIC_MIDI_MAX; midi++) {
+    const opt = document.createElement("option");
+    opt.value = String(midi);
+    opt.textContent = midi === DEFAULT_TONIC_MIDI ? `${midiPitchLabel(midi)} (default)` : midiPitchLabel(midi);
+    tonicSelect.appendChild(opt);
+  }
+  tonicSelect.value = String(readStoredTonicMidi());
 }
 
 /** Current song document name (download / title bar). */
@@ -380,6 +427,7 @@ function updateSyntaxHelp(): void {
 
 const PREVIEW_SIZE_KEY = "cmnt.previewPaneSize.v1";
 const AUDIO_PLAY_VISIBLE_KEY = "cmnt.audioPlayVisible";
+const TONIC_MIDI_KEY = "cmnt.tonicMidi";
 
 function applyStoredPreviewSize(): void {
   try {
@@ -1297,10 +1345,13 @@ async function playFromStart(): Promise<void> {
     const speed = currentPlaybackSpeed();
     const click = currentClickEnabled();
     const instrument = currentInstrumentId();
-    playbackHandle = await playSong(song, { bpm, speed, click, instrument });
+    const tonicMidi = currentTonicMidi();
+    playbackHandle = await playSong(song, { bpm, speed, click, instrument, tonicMidi });
     const instLabel = INSTRUMENTS.find((i) => i.id === instrument)?.label ?? instrument;
     const clickNote = click ? ", click on" : ", click off";
-    setStatusOk(`Playing ${instLabel} @ ${bpm} BPM × ${speed.toFixed(2)}${clickNote} — Stop to cancel`);
+    setStatusOk(
+      `Playing ${instLabel} @ ${bpm} BPM × ${speed.toFixed(2)}${clickNote}, Sa=${midiPitchLabel(tonicMidi)} — Stop to cancel`,
+    );
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
@@ -1460,6 +1511,22 @@ function buildAppMenus(): void {
         },
       },
       { label: `BPM: ${currentBpm()}`, submenu: bpmItems },
+      {
+        label: `Pitch (Sa): ${midiPitchLabel(currentTonicMidi())}`,
+        submenu: Array.from({ length: TONIC_MIDI_MAX - TONIC_MIDI_MIN + 1 }, (_, i) => {
+          const midi = TONIC_MIDI_MIN + i;
+          return {
+            label: midi === DEFAULT_TONIC_MIDI ? `${midiPitchLabel(midi)} (default)` : midiPitchLabel(midi),
+            checked: currentTonicMidi() === midi,
+            action: () => {
+              tonicSelect.value = String(midi);
+              persistTonicMidi(midi);
+              refreshAppMenus();
+              setStatusOk(`Pitch (Sa) → ${midiPitchLabel(midi)}`);
+            },
+          };
+        }),
+      },
       { label: `Practice: ${speedLabel.textContent ?? "1×"}`, submenu: practiceItems },
       {
         label: "Instrument",
@@ -1646,6 +1713,13 @@ instrumentSelect.addEventListener("change", () => {
   const inst = INSTRUMENTS.find((i) => i.id === instrumentSelect.value);
   setStatusOk(`Instrument → ${inst?.label ?? instrumentSelect.value}`);
 });
+tonicSelect.addEventListener("change", () => {
+  const midi = currentTonicMidi();
+  tonicSelect.value = String(midi);
+  persistTonicMidi(midi);
+  refreshAppMenus();
+  setStatusOk(`Pitch (Sa) → ${midiPitchLabel(midi)}`);
+});
 ragamDisplay.addEventListener("input", () => {
   ragamNameDirty = true;
   scheduleRender();
@@ -1719,6 +1793,7 @@ window.addEventListener("beforeunload", (ev) => {
 
 populateSchoolSelect();
 populateInstrumentSelect();
+populateTonicSelect();
 updateSpeedLabel();
 initPaneSplitter();
 applyAudioPlayVisible(readStoredAudioPlayVisible(), false);
