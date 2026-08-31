@@ -10,6 +10,7 @@ import {
   VisualRow,
   type LayoutItem,
 } from "../core/Layout.js";
+import { rowVerticalMetrics } from "./SvgScore.js";
 
 /** Letter @ 96dpi. */
 export const LETTER_PAGE_WIDTH_PX = Math.round(8.5 * 96); // 816
@@ -46,24 +47,7 @@ export function estimateHeadingHeight(h: Heading): number {
 
 /** Height used by one VisualRow (mirrors SvgScore.renderRow). */
 export function estimateRowHeight(row: VisualRow, rowSpacingScale = 1): number {
-  const swaraSize = parseFloat(row.swaraFontSize ?? "") || 15;
-  const lyricSize = parseFloat(row.lyricFontSize ?? "") || 12;
-  const gamakaSize = parseFloat(row.gamakaFontSize ?? "") || 10;
-  let maxLyricLines = 1;
-  for (const c of row.cells) {
-    if (c.kind === "swara") maxLyricLines = Math.max(maxLyricLines, Math.max(1, c.lyrics.length));
-  }
-  const octaveGap = Math.max(4, swaraSize * 0.22);
-  const gamakaGap = Math.max(3, swaraSize * 0.12);
-  const swaraToLyric = Math.max(swaraSize, lyricSize) * 2.0;
-  const lyricLineHeight = lyricSize * 1.4;
-  const topClearance = swaraSize + octaveGap + gamakaSize + gamakaGap * 2 + 8;
-  const bottomClearance = swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight;
-  const rowBottomPad = Math.min(
-    Math.max(6, lyricSize * 0.35) * row.rowSpacing * rowSpacingScale,
-    Math.max(swaraSize, lyricSize) * 1.5,
-  );
-  return topClearance + bottomClearance + rowBottomPad;
+  return rowVerticalMetrics(row, rowSpacingScale).rowHeight;
 }
 
 export function estimateItemHeight(item: LayoutItem, rowSpacingScale = 1): number {
