@@ -88,6 +88,24 @@ describe("renderScoreSvg", () => {
     expect(svg).not.toContain("முன்");
   });
 
+  it("lets %n and a following @word force alveolar ன் across a word break", () => {
+    const song = parse(
+      [
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: Tamil",
+        "S: s r g m",
+        "L: kan da%n @thari Sanam",
+        "",
+      ].join("\n"),
+    );
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).toContain("கந்");
+    expect(svg).toContain("தன்");
+    expect(svg).not.toContain("தந்");
+    expect(svg).toContain("தரி");
+  });
+
   it("escapes special XML characters in text content", () => {
     const song = parse('Heading: "Tom & Jerry <live>"\nTala: Adi\nS: s r g m\n');
     const svg = renderScoreSvg(layoutSong(song));

@@ -575,6 +575,9 @@ function nextSameWordLyric(
         if (n.isSustain || n.isRest) continue;
         return null;
       }
+      const trimmed = lyric.trim();
+      // "@thari" / "!thari" is an explicit new-word mark — do not look across it.
+      if (trimmed.startsWith("@") || trimmed.startsWith("!")) return null;
       const ws = lyricLine < n.lyricWordStart.length ? n.lyricWordStart[lyricLine]! : true;
       if (ws) return null;
       return lyric;
