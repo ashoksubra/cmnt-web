@@ -46,6 +46,24 @@ describe("renderScoreSvg", () => {
     expect(svg).toMatch(/class="cmnt-swara"[^>]*text-anchor="middle"/);
   });
 
+  it("places mandra stayi dots below the swara baseline, not on the glyph", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s' r` g m\nL: sa ri ga ma\n");
+    const svg = renderScoreSvg(layoutSong(song));
+    const swaraY = [...svg.matchAll(/<text class="cmnt-swara"[^>]*\by="([^"]+)"/g)].map((m) => Number(m[1]));
+    const dots = [...svg.matchAll(/<circle class="cmnt-octave" cx="[^"]+" cy="([^"]+)"/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(swaraY.length).toBeGreaterThanOrEqual(2);
+    expect(dots.length).toBe(2);
+    const baseline = swaraY[0]!;
+    const taraCy = dots[0]!;
+    const mandraCy = dots[1]!;
+    expect(taraCy).toBeLessThan(baseline);
+    expect(mandraCy).toBeGreaterThan(baseline + 6);
+    const lyricY = Number(svg.match(/<text class="cmnt-lyric"[^>]*\by="([^"]+)"/)?.[1]);
+    expect(lyricY).toBeGreaterThan(mandraCy + 4);
+  });
+
   it("places the octave dot on the glyph ink-box center when metrics are given", () => {
     const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s'\n");
     const metrics = { advance: 10, inkMin: 2, inkMax: 10 };

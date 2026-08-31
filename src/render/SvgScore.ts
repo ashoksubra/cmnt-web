@@ -118,6 +118,54 @@ const DEFAULT_SWARA_SIZE = 15;
 const DEFAULT_LYRIC_SIZE = 12;
 const DEFAULT_GAMAKA_SIZE = 10;
 
+/** Vertical metrics for one score row. Keep pagination in sync via this helper. */
+export function rowVerticalMetrics(row: VisualRow, rowSpacingScale = 1) {
+  const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
+  const lyricSize = parseFloat(row.lyricFontSize ?? "") || DEFAULT_LYRIC_SIZE;
+  const gamakaSize = parseFloat(row.gamakaFontSize ?? "") || DEFAULT_GAMAKA_SIZE;
+  let maxLyricLines = 1;
+  let hasMandra = false;
+  for (const c of row.cells) {
+    if (c.kind !== "swara") continue;
+    maxLyricLines = Math.max(maxLyricLines, Math.max(1, c.lyrics.length));
+    if (c.octave < 0) hasMandra = true;
+  }
+  const octaveGap = Math.max(4, swaraSize * 0.22);
+  const gamakaGap = Math.max(3, swaraSize * 0.12);
+  const dotSize = Math.max(3, swaraSize * 0.22);
+  // Tara stayi sits `octaveGap` above the em-box. Mandra needs that same air
+  // below the baseline plus a little for descenders (p, ரி, pulli).
+  const lowerStayiGap = octaveGap + Math.max(2, swaraSize * 0.22);
+  const lyricLineHeight = lyricSize * 1.4;
+  const swaraToLyricBase = Math.max(swaraSize, lyricSize) * 2.0;
+  const swaraToLyric = hasMandra
+    ? Math.max(Math.max(swaraSize, lyricSize) * 2.2, lowerStayiGap + dotSize + lyricSize * 0.7)
+    : swaraToLyricBase;
+  const topClearance = swaraSize + octaveGap + gamakaSize + gamakaGap * 2 + 8;
+  const bottomClearance = swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight;
+  const rowBottomPad = Math.min(
+    Math.max(6, lyricSize * 0.35) * row.rowSpacing * rowSpacingScale,
+    Math.max(swaraSize, lyricSize) * 1.5,
+  );
+  return {
+    swaraSize,
+    lyricSize,
+    gamakaSize,
+    octaveGap,
+    gamakaGap,
+    dotSize,
+    lowerStayiGap,
+    swaraToLyric,
+    lyricLineHeight,
+    topClearance,
+    bottomClearance,
+    rowBottomPad,
+    rowHeight: topClearance + bottomClearance + rowBottomPad,
+    maxLyricLines,
+    hasMandra,
+  };
+}
+
 export function renderScoreSvg(items: LayoutItem[], options: SvgScoreOptions = {}): string {
   const contentWidth = options.contentWidth ?? DEFAULT_CONTENT_WIDTH;
   const marginX = options.marginX ?? DEFAULT_MARGIN_X;
@@ -597,26 +645,20 @@ function renderRow(
   followingRows: VisualRow[] = [],
 ): { svg: string; nextY: number } {
   const script = languageScript(row.language, forceScript);
-  const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
-  const lyricSize = parseFloat(row.lyricFontSize ?? "") || DEFAULT_LYRIC_SIZE;
-  const gamakaSize = parseFloat(row.gamakaFontSize ?? "") || DEFAULT_GAMAKA_SIZE;
-
-  let maxLyricLines = 1;
-  for (const c of row.cells) {
-    if (c.kind === "swara") maxLyricLines = Math.max(maxLyricLines, Math.max(1, c.lyrics.length));
-  }
-
-  const octaveGap = Math.max(4, swaraSize * 0.22);
-  const gamakaGap = Math.max(3, swaraSize * 0.12);
-  const swaraToLyric = Math.max(swaraSize, lyricSize) * 2.0;
-  const lyricLineHeight = lyricSize * 1.4;
-  const topClearance = swaraSize + octaveGap + gamakaSize + gamakaGap * 2 + 8;
-  const bottomClearance = swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight;
-  const rowBottomPad = Math.min(
-    Math.max(6, lyricSize * 0.35) * row.rowSpacing * rowSpacingScale,
-    Math.max(swaraSize, lyricSize) * 1.5,
-  );
-  const rowHeight = topClearance + bottomClearance + rowBottomPad;
+  const metricsV = rowVerticalMetrics(row, rowSpacingScale);
+  const {
+    swaraSize,
+    octaveGap,
+    gamakaGap,
+    gamakaSize,
+    swaraToLyric,
+    lyricLineHeight,
+    topClearance,
+    rowHeight,
+    maxLyricLines,
+    lowerStayiGap,
+    dotSize,
+  } = metricsV;
   const baselineY = y + topClearance;
 
   const parts: string[] = [];
@@ -677,8 +719,8 @@ function renderRow(
       );
 
       if (c.octave !== 0) {
-        const dotSize = Math.max(3, swaraSize * 0.22);
-        const dotTopY = c.octave > 0 ? baselineY - swaraSize - octaveGap : baselineY + octaveGap * 0.4;
+        const dotTopY =
+          c.octave > 0 ? baselineY - swaraSize - octaveGap : baselineY + lowerStayiGap;
         const metrics = measureGlyph?.(swaraDisplay, "swara") ?? null;
         const dotCx = glyphInkCenter(cx, metrics);
         parts.push(
