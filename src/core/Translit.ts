@@ -168,6 +168,20 @@ function parseSyllable(s: string): Unit[] {
       i += 2;
       continue;
     }
+    // In-token Tamil n overrides. "@n"/"!n" force dental ந; "%n" forces alveolar ன.
+    // Unlike ~n/#n these may take a vowel ("%nA" → னா, "ka@n" → கந்).
+    if (s.startsWith("%n", i) || s.startsWith("@n", i) || s.startsWith("!n", i)) {
+      const key = s.startsWith("%n", i) ? "n-alv" : "n-dent";
+      i += 2;
+      const vForced = matchVowel(s, i);
+      if (vForced != null) {
+        units.push({ kind: "consVowel", c: key, v: vForced });
+        i += surfaceOfVowel(vForced).length;
+      } else {
+        units.push({ kind: "bareCons", c: key });
+      }
+      continue;
+    }
     const cons = matchConsonant(s, i);
     if (cons != null) {
       if (cons === "k+ssh") {
@@ -573,6 +587,8 @@ function consonantGlyph(
   followingKey: string | null,
   precedingKey: string | null,
 ): string {
+  if (key === "n-dent") return cons["n"] ?? "";
+  if (key === "n-alv") return script === "tamil" ? TAMIL_ALVEOLAR_NA : (cons["n"] ?? "");
   if (script === "tamil" && key === "n") {
     // An explicit word-start override (the @/! marker) forces dental regardless
     // of surrounding context -- that's the whole point of the override.
@@ -601,7 +617,7 @@ function consonantGlyph(
 function stripTransliterationMarkers(s: string): string {
   let out = s;
   if (out.startsWith("@") || out.startsWith("!")) out = out.substring(1);
-  return out.replace(/~n/g, "n").replace(/#n/g, "n");
+  return out.replace(/~n/g, "n").replace(/#n/g, "n").replace(/%n/g, "n").replace(/@n/g, "n").replace(/!n/g, "n");
 }
 
 /**
@@ -615,6 +631,8 @@ function stripTransliterationMarkers(s: string): string {
  * @param followingRoman the next lyric token of the *same word* when notation
  *   splits a word across notes (`kan` + `dan` for கந்தன்). A trailing bare "n"
  *   then sees the following dental stop and stays ந், not ன்.
+ *   Overrides: `ka@n` / `@n` force ந்; `da%n` / `%n` force ன். Prefix `@` on the
+ *   *next* token marks a new word so this syllable does not look across.
  */
 export function transliterate(
   roman: string,
@@ -782,11 +800,11 @@ export function transliterateText(roman: string, script: Script, wordStart = tru
       // has the same gap; lyrics go through transliterate() instead).
       word += c;
     } else if (
-      (c === "~" || c === "#") &&
+      (c === "~" || c === "#" || c === "%") &&
       i + 1 < roman.length &&
       /[nN]/.test(roman[i + 1]!)
     ) {
-      // Bare velar/palatal nasal escapes ("#n" → ங், "~n" → ஞ்) must stay in the
+      // Bare nasal escapes ("#n" → ங், "~n" → ஞ், "%n" → ன்) must stay in the
       // phonetic stream; otherwise the scanner splits "sa#ngam" into "sa" + "#" + "ngam".
       word += c;
     } else {

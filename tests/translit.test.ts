@@ -113,8 +113,21 @@ describe("transliterate (Tamil nasals — matches JAR)", () => {
     expect(firstConsonantKey("yam")).toBe("y");
   });
 
+  it("honors in-token @n / %n overrides (கந்தன் vs குன்றன்)", () => {
+    expect(transliterate("ka@n", "tamil")).toBe("கந்");
+    expect(transliterate("da%n", "tamil", false, "thari")).toBe("தன்");
+    expect(transliterate("%n", "tamil")).toBe("ன்");
+    expect(transliterate("%nA", "tamil")).toBe("னா");
+    expect(transliterate("kun", "tamil", true, "Ran")).toBe("குன்");
+    expect(transliterate("Ran", "tamil", false)).toBe("றன்");
+    expect(transliterate("pan", "tamil", true, "dam")).toBe("பந்");
+    expect(transliterate("mun", "tamil", true, "thai")).toBe("முந்");
+  });
+
   it("strips markers for english/null script", () => {
     expect(transliterate("@nE", null)).toBe("nE");
+    expect(transliterate("ka@n", scriptFor("english"))).toBe("kan");
+    expect(transliterate("da%n", null)).toBe("dan");
     expect(transliterate("sa#ngam", scriptFor("english"))).toBe("sangam");
     expect(transliterate("sa~ngam", null)).toBe("sangam");
   });

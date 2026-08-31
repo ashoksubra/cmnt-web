@@ -181,6 +181,7 @@ const CLASSIC_SYNTAX_HELP = [
   "L: sa ri ga ma | pa da ni sa   (bars | on L: are ignored)",
   "",
   "Select notes, then Insert → Speed (2nd/3rd/4th) or Insert → Gamaka.",
+  "Tamil n: ka@n / @n = ந்,  da%n / %n = ன்.  @thari starts a new word.",
   "A { sA r s r … }(kh) cluster fills one parent beat; sA is twice a short note.",
   "",
   "Tip: Help → YAML front matter lists every header key. Start with --- for optional YAML (keys lowercase).",
@@ -1078,6 +1079,23 @@ const GAMAKA_MARK_RE = /^(?:\^|\/\/|\/|\\\\|\\|~~|~|=|\([^)]*\))$/;
 const SWARA_WITH_GAMAKA_RE =
   /^([srgmpdn][ai]?)(['`]?)(\*?)(?:\^|\/\/|\/|\\\\|\\|~~|~|=|\([^)]*\))?(-*)$/i;
 
+/** Force Tamil dental ந (@n) or alveolar ன (%n) on a selected n, or at the caret. */
+function insertTamilNasalOverride(kind: "dent" | "alv"): void {
+  const mark = kind === "dent" ? "@n" : "%n";
+  const start = sourceInput.selectionStart ?? 0;
+  const end = sourceInput.selectionEnd ?? start;
+  if (start !== end) {
+    const sel = sourceInput.value.slice(start, end);
+    if (/[nN]$/.test(sel) && !/[@!#~%]n$/i.test(sel)) {
+      replaceRange(start, end, sel.slice(0, -1) + mark);
+      setStatusOk(kind === "dent" ? "Tamil n → ந் (@n)" : "Tamil n → ன் (%n)");
+      return;
+    }
+  }
+  insertAtCursor(mark);
+  setStatusOk(kind === "dent" ? "Inserted @n (ந்)" : "Inserted %n (ன்)");
+}
+
 function insertAtCursor(text: string): void {
   const start = sourceInput.selectionStart ?? sourceInput.value.length;
   const end = sourceInput.selectionEnd ?? start;
@@ -1611,6 +1629,26 @@ function buildAppMenus(): void {
         { label: "Gamaka", submenu: gamakaItems },
         { label: "Speed (2nd / 3rd / 4th)", submenu: speedItems },
         { label: "Language line", submenu: languageItems },
+        {
+          label: "Tamil n (ந / ன)",
+          submenu: [
+            {
+              label: "Force dental ந்   @n",
+              action: () => insertTamilNasalOverride("dent"),
+            },
+            {
+              label: "Force alveolar ன்   %n",
+              action: () => insertTamilNasalOverride("alv"),
+            },
+            {
+              label: "New word prefix   @",
+              action: () => {
+                insertAtCursor("@");
+                setStatusOk("Next lyric starts a new word (@) — previous n will not look across");
+              },
+            },
+          ],
+        },
         { separator: true },
         {
           label: "Raagam Name…",
