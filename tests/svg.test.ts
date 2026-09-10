@@ -98,12 +98,31 @@ describe("renderScoreSvg", () => {
       ].join("\n"),
     );
     const svg = renderScoreSvg(layoutSong(song));
-    expect(svg).toContain("கந்");
-    expect(svg).toContain("தன்");
+    expect(svg).toContain("க₁ந்");
+    expect(svg).toContain("த₃ன்");
     expect(svg).toContain("முந்");
-    expect(svg).toContain("தை");
-    expect(svg).not.toContain("கன்");
+    expect(svg).toContain("தை₂");
+    expect(svg).not.toContain("க₁ன்");
     expect(svg).not.toContain("முன்");
+  });
+
+  it("marks Tamil lyric varga stops with subscripts (ka kha ga gha)", () => {
+    const song = parse(
+      [
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: Tamil",
+        "S: s r g m",
+        "L: ka kha ga gha",
+        "",
+      ].join("\n"),
+    );
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).toContain("க₁");
+    expect(svg).toContain("க₂");
+    expect(svg).toContain("க₃");
+    expect(svg).toContain("க₄");
+    expect(svg).not.toMatch(/class="cmnt-swara"[^>]*>க[₁₂₃₄]/);
   });
 
   it("lets %n and a following @word force alveolar ன் across a word break", () => {
@@ -118,10 +137,10 @@ describe("renderScoreSvg", () => {
       ].join("\n"),
     );
     const svg = renderScoreSvg(layoutSong(song));
-    expect(svg).toContain("கந்");
-    expect(svg).toContain("தன்");
-    expect(svg).not.toContain("தந்");
-    expect(svg).toContain("தரி");
+    expect(svg).toContain("க₁ந்");
+    expect(svg).toContain("த₃ன்");
+    expect(svg).not.toContain("த₃ந்");
+    expect(svg).toContain("த₂ரி");
   });
 
   it("escapes special XML characters in text content", () => {

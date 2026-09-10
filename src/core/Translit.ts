@@ -16,6 +16,8 @@
  *   <li>Long vowels: A, I, U, E, O (vs short a, i, u, e, o); ai, au as-is.</li>
  *   <li>Retroflex consonants written capitalized: T, Th, D, Dh, N, L, R.</li>
  *   <li>Aspirates: kh, gh, ch, jh, th, dh, Th, Dh, ph, bh.</li>
+ *   <li>Tamil lyrics mark the collapsed varga with a subscript: ka/kha/ga/gha
+ *       → க₁ க₂ க₃ க₄ (same 1–4 on ச ட த ப). Swara letters omit this.</li>
  *   <li>sh = palatal sibilant, S = retroflex sibilant, s = dental s.</li>
  *   <li>zh = Tamil "azhagu" zha.</li>
  *   <li>ksh = conjunct "k + retroflex sh".</li>
@@ -522,7 +524,8 @@ const CONSONANT: Record<ScriptKey, Record<string, string>> = {
     const SA = "\u0BB8";
     const HA = "\u0BB9";
     const SHA_PAL = "\u0BB6";
-    // stops/aspirates all collapse onto the single Tamil letter (no voicing distinction)
+    // Stops/aspirates collapse onto the single Tamil letter; lyric output then
+    // appends a varga subscript (க₁/க₂/க₃/க₄) so the roman sound stays visible.
     return {
       k: KA,
       kh: KA,
@@ -566,6 +569,44 @@ const CONSONANT: Record<ScriptKey, Record<string, string>> = {
 
 /** Tamil alveolar na (ன) -- used mid/end-word; dental ந (the default "n" mapping) is word-initial. */
 const TAMIL_ALVEOLAR_NA = "\u0BA9";
+
+/** Unicode subscripts used for Tamil varga numbers (and elsewhere for Aro/Ava). */
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+
+/**
+ * Tamil has one letter per varga. Lyric transliteration writes the roman
+ * voicing/aspiration as a subscript: 1 unvoiced, 2 aspirated, 3 voiced, 4
+ * voiced-aspirated. ja/jha keep Grantha ஜ and still take ₃/₄.
+ */
+const TAMIL_VARGA_INDEX: Readonly<Record<string, number>> = {
+  k: 1,
+  kh: 2,
+  g: 3,
+  gh: 4,
+  c: 1,
+  ch: 2,
+  j: 3,
+  jh: 4,
+  tt: 1,
+  tth: 2,
+  dd: 3,
+  ddh: 4,
+  t: 1,
+  th: 2,
+  d: 3,
+  dh: 4,
+  p: 1,
+  ph: 2,
+  b: 3,
+  bh: 4,
+};
+
+function tamilVargaSubscript(key: string, enabled: boolean): string {
+  if (!enabled) return "";
+  const n = TAMIL_VARGA_INDEX[key];
+  if (n == null) return "";
+  return SUBSCRIPT_DIGITS.charAt(n);
+}
 
 /** Dental stops that trigger homorganic dental "n" (santham, bandham, munthu, thanthi). */
 function isDentalStop(key: string | null): boolean {
@@ -639,6 +680,7 @@ export function transliterate(
   script: Script,
   wordStart = true,
   followingRoman?: string | null,
+  opts?: { vargaSubscripts?: boolean },
 ): string {
   if (roman == null || roman === "") return roman;
   // No target script means English/roman output -- the @/!/~n/#n markers only mean
@@ -668,6 +710,7 @@ export function transliterate(
   const virama = VIRAMA[script];
 
   const units = parseSyllable(s);
+  const vargaOn = script === "tamil" && opts?.vargaSubscripts !== false;
   let out = "";
   let atStart = ws;
   let prevKey: string | null = null;
@@ -682,12 +725,14 @@ export function transliterate(
     } else if (u.kind === "consVowel") {
       out += consonantGlyph(script, cons, u.c, atStart, false, null, prevKey);
       if (u.v !== "a") out += signs[u.v] ?? "";
+      out += tamilVargaSubscript(u.c, vargaOn);
       atStart = false;
       prevKey = u.c;
     } else if (u.kind === "bareCons") {
       let nextKey = nextConsonantKey(units, i + 1);
       if (nextKey == null && followingRoman) nextKey = firstConsonantKey(followingRoman);
       out += consonantGlyph(script, cons, u.c, atStart, true, nextKey, prevKey) + virama;
+      out += tamilVargaSubscript(u.c, vargaOn);
       atStart = false;
       prevKey = u.c;
     } else if (u.kind === "visarga") {
@@ -749,7 +794,7 @@ export function transliterateSwara(label: string, script: Script): string {
   } else {
     return label;
   }
-  return transliterate(canonical, script) + suffix;
+  return transliterate(canonical, script, true, null, { vargaSubscripts: false }) + suffix;
 }
 
 /**

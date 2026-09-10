@@ -923,8 +923,8 @@ body {
    school is active (kept after the school rules so it always wins on ties).
    Malayalam deferred until Tamil/Telugu/Kannada/Sanskrit UI wiring is settled. */
 .score-page.lang-tamil .cmnt-score {
-  --swara-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;
-  --lyric-font: "Noto Sans Tamil", "Noto Serif Tamil", Georgia, serif;
+  --swara-font: "Noto Sans Tamil", "Noto Serif Tamil", "Noto Sans", Georgia, serif;
+  --lyric-font: "Noto Sans Tamil", "Noto Serif Tamil", "Noto Sans", Georgia, serif;
 }
 .score-page.lang-telugu .cmnt-score {
   --swara-font: "Noto Sans Telugu", Georgia, serif;

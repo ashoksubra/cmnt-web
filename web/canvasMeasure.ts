@@ -30,7 +30,7 @@ export function createCanvasMetrics(opts: {
   const swaraFont =
     opts.swaraFont ??
     (opts.forceScript
-      ? '"Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", Georgia, serif'
+      ? '"Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans", Georgia, serif'
       : 'Georgia, "Times New Roman", serif');
   const lyricFont = opts.lyricFont ?? swaraFont;
   const swaraSize = opts.swaraSize ?? 16;
