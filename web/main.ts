@@ -182,6 +182,7 @@ const CLASSIC_SYNTAX_HELP = [
   "",
   "Select notes, then Insert → Speed (2nd/3rd/4th) or Insert → Gamaka.",
   "Tamil n: ka@n / @n = ந்,  da%n / %n = ன்.  @thari starts a new word.",
+  "Tamil varga: ka/kha/ga/gha → க₁ க₂ க₃ க₄ (same 1–4 on ச ட த ப).",
   "A { sA r s r … }(kh) cluster fills one parent beat; sA is twice a short note.",
   "",
   "Tip: Help → YAML front matter lists every header key. Start with --- for optional YAML (keys lowercase).",
@@ -934,7 +935,7 @@ function exportPng(): void {
 }
 
 const PRINT_FONT_LINKS = [
-  "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap",
+  "https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Serif+Tamil:wght@400;600;700&display=swap",
 ].join("");
 
 /** Decorate a raw SVG string with theme vars + app CSS (for print/export). */

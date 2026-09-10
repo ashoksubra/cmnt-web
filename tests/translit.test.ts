@@ -77,34 +77,34 @@ describe("transliterate (Tamil nasals — matches JAR)", () => {
   });
 
   it("keeps #n attached inside a syllable (sa#ngam → ஸங்கம்)", () => {
-    expect(transliterate("sa#ngam", "tamil")).toBe("ஸங்கம்");
-    expect(transliterate("#nga", "tamil")).toBe("ங்க");
-    expect(transliterate("~nja", "tamil")).toBe("ஞ்ஜ");
-    expect(transliterate("ku#n", "tamil")).toBe("குங்");
+    expect(transliterate("sa#ngam", "tamil")).toBe("ஸங்க₃ம்");
+    expect(transliterate("#nga", "tamil")).toBe("ங்க₃");
+    expect(transliterate("~nja", "tamil")).toBe("ஞ்ஜ₃");
+    expect(transliterate("ku#n", "tamil")).toBe("கு₁ங்");
   });
 
   it("uses dental ந before dental stops and after liquid/glides", () => {
-    expect(transliterate("santham", "tamil")).toBe("ஸந்தம்");
-    expect(transliterate("vandhitha", "tamil")).toBe("வந்தித");
+    expect(transliterate("santham", "tamil")).toBe("ஸந்த₂ம்");
+    expect(transliterate("vandhitha", "tamil")).toBe("வந்தி₄த₂");
   });
 
   it("uses alveolar ன் in bare clusters otherwise (janyam)", () => {
-    expect(transliterate("janyam", "tamil")).toBe("ஜன்யம்");
+    expect(transliterate("janyam", "tamil")).toBe("ஜ₃ன்யம்");
   });
 
   it("keeps dental ந் when a word is split across notes (kan + dan)", () => {
-    expect(transliterate("kan", "tamil", true, "dan")).toBe("கந்");
-    expect(transliterate("dan", "tamil", false)).toBe("தன்");
+    expect(transliterate("kan", "tamil", true, "dan")).toBe("க₁ந்");
+    expect(transliterate("dan", "tamil", false)).toBe("த₃ன்");
     expect(transliterate("mun", "tamil", true, "thai")).toBe("முந்");
-    expect(transliterate("thai", "tamil", false)).toBe("தை");
-    expect(transliterate("pan", "tamil", true, "dam")).toBe("பந்");
-    expect(transliterate("dam", "tamil", false)).toBe("தம்");
-    expect(transliterate("jan", "tamil", true, "yam")).toBe("ஜன்");
+    expect(transliterate("thai", "tamil", false)).toBe("தை₂");
+    expect(transliterate("pan", "tamil", true, "dam")).toBe("ப₁ந்");
+    expect(transliterate("dam", "tamil", false)).toBe("த₃ம்");
+    expect(transliterate("jan", "tamil", true, "yam")).toBe("ஜ₃ன்");
   });
 
   it("keeps alveolar ன் when the split syllable has no following token", () => {
-    expect(transliterate("kan", "tamil", true)).toBe("கன்");
-    expect(transliterate("kan", "tamil", true, null)).toBe("கன்");
+    expect(transliterate("kan", "tamil", true)).toBe("க₁ன்");
+    expect(transliterate("kan", "tamil", true, null)).toBe("க₁ன்");
   });
 
   it("reads the first consonant of the next syllable", () => {
@@ -114,13 +114,13 @@ describe("transliterate (Tamil nasals — matches JAR)", () => {
   });
 
   it("honors in-token @n / %n overrides (கந்தன் vs குன்றன்)", () => {
-    expect(transliterate("ka@n", "tamil")).toBe("கந்");
-    expect(transliterate("da%n", "tamil", false, "thari")).toBe("தன்");
+    expect(transliterate("ka@n", "tamil")).toBe("க₁ந்");
+    expect(transliterate("da%n", "tamil", false, "thari")).toBe("த₃ன்");
     expect(transliterate("%n", "tamil")).toBe("ன்");
     expect(transliterate("%nA", "tamil")).toBe("னா");
-    expect(transliterate("kun", "tamil", true, "Ran")).toBe("குன்");
+    expect(transliterate("kun", "tamil", true, "Ran")).toBe("கு₁ன்");
     expect(transliterate("Ran", "tamil", false)).toBe("றன்");
-    expect(transliterate("pan", "tamil", true, "dam")).toBe("பந்");
+    expect(transliterate("pan", "tamil", true, "dam")).toBe("ப₁ந்");
     expect(transliterate("mun", "tamil", true, "thai")).toBe("முந்");
   });
 
@@ -137,19 +137,47 @@ describe("transliterateText", () => {
   it("transliterates common maha_ganapatim lyric syllables into Tamil", () => {
     expect(transliterateText("ma", "tamil")).toBe("ம");
     expect(transliterateText("hA", "tamil")).toBe("ஹா");
-    expect(transliterateText("ga", "tamil")).toBe("க");
+    expect(transliterateText("ga", "tamil")).toBe("க₃");
     expect(transliterateText("Na", "tamil")).toBe("ண");
-    expect(transliterateText("pa", "tamil")).toBe("ப");
-    expect(transliterateText("tim", "tamil")).toBe("திம்");
+    expect(transliterateText("pa", "tamil")).toBe("ப₁");
+    expect(transliterateText("tim", "tamil")).toBe("தி₁ம்");
   });
 
   it("keeps @/!/~n/#n markers attached across multi-syllable text", () => {
     expect(transliterateText("@nA", "tamil")).toBe("நா");
     expect(transliterateText("#n", "tamil")).toBe("ங்");
     expect(transliterateText("~n", "tamil")).toBe("ஞ்");
-    expect(transliterateText("sa#ngam", "tamil")).toBe("ஸங்கம்");
+    expect(transliterateText("sa#ngam", "tamil")).toBe("ஸங்க₃ம்");
     // Capital S = palatal/retroflex sibilant (ஶ); lowercase s = dental ஸ.
-    expect(transliterateText("Sa #n kha", "tamil")).toBe("ஶ ங் க");
+    expect(transliterateText("Sa #n kha", "tamil")).toBe("ஶ ங் க₂");
+  });
+
+  it("marks Tamil varga stops with subscripts 1–4 (ka kha ga gha)", () => {
+    expect(transliterate("ka", "tamil")).toBe("க₁");
+    expect(transliterate("kha", "tamil")).toBe("க₂");
+    expect(transliterate("ga", "tamil")).toBe("க₃");
+    expect(transliterate("gha", "tamil")).toBe("க₄");
+    expect(transliterate("kA", "tamil")).toBe("கா₁");
+    expect(transliterate("k", "tamil")).toBe("க்₁");
+    expect(transliterate("ca", "tamil")).toBe("ச₁");
+    expect(transliterate("cha", "tamil")).toBe("ச₂");
+    expect(transliterate("ja", "tamil")).toBe("ஜ₃");
+    expect(transliterate("jha", "tamil")).toBe("ஜ₄");
+    expect(transliterate("Ta", "tamil")).toBe("ட₁");
+    expect(transliterate("Tha", "tamil")).toBe("ட₂");
+    expect(transliterate("Da", "tamil")).toBe("ட₃");
+    expect(transliterate("Dha", "tamil")).toBe("ட₄");
+    expect(transliterate("ta", "tamil")).toBe("த₁");
+    expect(transliterate("tha", "tamil")).toBe("த₂");
+    expect(transliterate("da", "tamil")).toBe("த₃");
+    expect(transliterate("dha", "tamil")).toBe("த₄");
+    expect(transliterate("pa", "tamil")).toBe("ப₁");
+    expect(transliterate("pha", "tamil")).toBe("ப₂");
+    expect(transliterate("ba", "tamil")).toBe("ப₃");
+    expect(transliterate("bha", "tamil")).toBe("ப₄");
+    expect(transliterate("ga", "telugu")).toBe("గ");
+    expect(transliterate("kha", "sanskrit")).toBe("ख");
+    expect(transliterate("ga", "tamil", true, null, { vargaSubscripts: false })).toBe("க");
   });
 
   it("returns the roman text unchanged for english or null script", () => {

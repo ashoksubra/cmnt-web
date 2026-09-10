@@ -46,7 +46,7 @@ describe("formatRagamTalamDisplay", () => {
       ragaRoman: "pUrNa",
       talaRoman: "rUpakam",
     });
-    expect(out).toContain("ராகம் : பூர்ண");
+    expect(out).toContain("ராகம் : பூ₁ர்ண");
     expect(out).toContain("தாளம் : ");
     expect(out).not.toContain("Purnachandrika");
   });
@@ -143,7 +143,7 @@ describe("CmntParser ragam/talam language", () => {
     expect(h.talaDisplayRoman).toBe("rUpakam");
     const svg = renderScoreSvg(layoutSong(song));
     expect(svg).toContain("ராகம்");
-    expect(svg).toContain("பூர்ண");
+    expect(svg).toContain("பூ₁ர்ண");
     expect(svg).not.toContain("Purnachandrika");
   });
 
