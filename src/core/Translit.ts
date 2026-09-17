@@ -20,7 +20,7 @@
  *       → க₁ க₂ க₃ க₄ (same 1–4 on ச ட த ப). Swara letters omit this.</li>
  *   <li>sh = palatal sibilant, S = retroflex sibilant, s = dental s.</li>
  *   <li>zh = Tamil "azhagu" zha.</li>
- *   <li>ksh = conjunct "k + retroflex sh".</li>
+ *   <li>ksh = conjunct "k + retroflex sh" (Tamil Grantha க்ஷ, not க் ஷ).</li>
  * </ul>
  */
 
@@ -729,10 +729,13 @@ export function transliterate(
       atStart = false;
       prevKey = u.c;
     } else if (u.kind === "bareCons") {
-      let nextKey = nextConsonantKey(units, i + 1);
+      const clusterNext = nextConsonantKey(units, i + 1);
+      let nextKey = clusterNext;
       if (nextKey == null && followingRoman) nextKey = firstConsonantKey(followingRoman);
       out += consonantGlyph(script, cons, u.c, atStart, true, nextKey, prevKey) + virama;
-      out += tamilVargaSubscript(u.c, vargaOn);
+      // A varga subscript after virama sits between the pulli and the next
+      // consonant and breaks conjuncts (க்₁ஷ instead of Grantha க்ஷ).
+      if (clusterNext == null) out += tamilVargaSubscript(u.c, vargaOn);
       atStart = false;
       prevKey = u.c;
     } else if (u.kind === "visarga") {

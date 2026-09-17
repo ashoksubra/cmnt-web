@@ -177,6 +177,7 @@ export const HELP_COMPOSER: HelpTopic = {
     "  ka/kha/ga/gha → க₁ க₂ க₃ க₄    ca/cha/ja/jha → ச₁ ச₂ ஜ₃ ஜ₄",
     "  Ta/Tha/Da/Dha → ட₁ ட₂ ட₃ ட₄    ta/tha/da/dha → த₁ த₂ த₃ த₄",
     "  pa/pha/ba/bha → ப₁ ப₂ ப₃ ப₄",
+    "  ksh → க்ஷ (Grantha conjunct, not க் ஷ).  #n → ங்    ~n → ஞ்    ja → ஜ₃",
     "  Swara letters on the score stay unmarked (க for ga, not க₃).",
     "",
     "RAGAM / TALAM",
