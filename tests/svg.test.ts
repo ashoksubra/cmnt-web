@@ -125,6 +125,24 @@ describe("renderScoreSvg", () => {
     expect(svg).not.toMatch(/class="cmnt-swara"[^>]*>க[₁₂₃₄]/);
   });
 
+  it("renders ksha as Grantha க்ஷ, not split க் ஷ", () => {
+    const song = parse(
+      [
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "Language: Tamil",
+        "S: s r g m",
+        "L: ksha kshA kshE tram",
+        "",
+      ].join("\n"),
+    );
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).toContain("க்ஷ");
+    expect(svg).toContain("க்ஷா");
+    expect(svg).toContain("க்ஷே");
+    expect(svg).not.toMatch(/க்[₀₁₂₃₄₅₆₇₈₉]ஷ/);
+  });
+
   it("lets %n and a following @word force alveolar ன் across a word break", () => {
     const song = parse(
       [

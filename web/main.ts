@@ -182,7 +182,7 @@ const CLASSIC_SYNTAX_HELP = [
   "",
   "Select notes, then Insert → Speed (2nd/3rd/4th) or Insert → Gamaka.",
   "Tamil n: ka@n / @n = ந்,  da%n / %n = ன்.  @thari starts a new word.",
-  "Tamil varga: ka/kha/ga/gha → க₁ க₂ க₃ க₄ (same 1–4 on ச ட த ப).",
+  "Tamil varga: ka/kha/ga/gha → க₁ க₂ க₃ க₄ (same 1–4 on ச ட த ப).  ksh → க்ஷ.",
   "A { sA r s r … }(kh) cluster fills one parent beat; sA is twice a short note.",
   "",
   "Tip: Help → YAML front matter lists every header key. Start with --- for optional YAML (keys lowercase).",

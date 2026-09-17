@@ -180,6 +180,17 @@ describe("transliterateText", () => {
     expect(transliterate("ga", "tamil", true, null, { vargaSubscripts: false })).toBe("க");
   });
 
+  it("renders ksha as the Grantha conjunct க்ஷ, not க் ஷ", () => {
+    expect(transliterate("ksha", "tamil")).toBe("க்ஷ");
+    expect(transliterate("kshA", "tamil")).toBe("க்ஷா");
+    expect(transliterate("kshE", "tamil")).toBe("க்ஷே");
+    expect(transliterate("ksh", "tamil")).toBe("க்ஷ்");
+    expect(transliterate("ksha", "tamil")).not.toContain(" ");
+    expect(transliterate("ksha", "tamil")).not.toMatch(/க்[₀₁₂₃₄₅₆₇₈₉]/);
+    expect(transliterateText("lakshaNam", "tamil")).toBe("லக்ஷணம்");
+    expect(transliterateText("kshEtram", "tamil")).toBe("க்ஷேத்ரம்");
+  });
+
   it("returns the roman text unchanged for english or null script", () => {
     expect(transliterateText("ganesha", scriptFor("english"))).toBe("ganesha");
     expect(transliterateText("ganesha", null)).toBe("ganesha");
