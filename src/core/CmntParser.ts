@@ -454,6 +454,17 @@ class Parser {
         if (this.song === null && m) continue; // accepted, not used in MVP rendering
       }
       {
+        const om = /^Orientation:\s*(.*)$/i.exec(line);
+        if (om && this.swaras.length === 0) {
+          const s = om[1]!.trim().toLowerCase();
+          if (s === "portrait") this.portrait = true;
+          else if (s === "landscape") this.portrait = false;
+          else throw new ParseException(`invalid orientation specification: ${s}`, lineNo);
+          if (this.song !== null) this.song.portrait = this.portrait;
+          continue;
+        }
+      }
+      {
         const pe = /^PhraseEnds:\s*(.*)$/i.exec(line);
         if (pe && this.swaras.length === 0) {
           const parts = pe[1]!.trim().split(",");
@@ -467,15 +478,7 @@ class Parser {
         }
       }
       if (this.song === null && this.swaras.length === 0) {
-        let m = /^Orientation:\s*(.*)$/i.exec(line);
-        if (m) {
-          const s = m[1]!.trim().toLowerCase();
-          if (s === "portrait") this.portrait = true;
-          else if (s === "landscape") this.portrait = false;
-          else throw new ParseException(`invalid orientation specification: ${s}`, lineNo);
-          continue;
-        }
-        m = /^Layout:\s*(.*)$/i.exec(line);
+        const m = /^Layout:\s*(.*)$/i.exec(line);
         if (m) {
           if (this.defTalaName !== null) throw new ParseException("layout must appear before tala", lineNo);
           const s = m[1]!.trim().toLowerCase();

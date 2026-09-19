@@ -2,10 +2,29 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@cmnt/core/CmntParser";
 import { layoutSong, VisualHeading, VisualRow } from "@cmnt/core/Layout";
 import { Heading } from "@cmnt/model/Heading";
-import { paginateLayoutItems, estimateItemHeight } from "@cmnt/render/ScorePagination";
+import {
+  paginateLayoutItems,
+  estimateItemHeight,
+  letterPageMetrics,
+  LETTER_PAGE_WIDTH_PX,
+  LETTER_PAGE_HEIGHT_PX,
+} from "@cmnt/render/ScorePagination";
 import { alignSection } from "@cmnt/render/SvgScore";
 import { Cell } from "@cmnt/core/Layout";
 import { Fraction } from "@cmnt/model/Fraction";
+
+describe("letterPageMetrics", () => {
+  it("swaps Letter width and height for landscape", () => {
+    const port = letterPageMetrics(true);
+    expect(port.pageWidth).toBe(LETTER_PAGE_WIDTH_PX);
+    expect(port.pageHeight).toBe(LETTER_PAGE_HEIGHT_PX);
+    const land = letterPageMetrics(false);
+    expect(land.pageWidth).toBe(LETTER_PAGE_HEIGHT_PX);
+    expect(land.pageHeight).toBe(LETTER_PAGE_WIDTH_PX);
+    expect(land.contentWidth).toBeGreaterThan(port.contentWidth);
+    expect(land.contentHeight).toBeLessThan(port.contentHeight);
+  });
+});
 
 describe("paginateLayoutItems", () => {
   it("keeps a section title with the following notation row (no orphan heading)", () => {

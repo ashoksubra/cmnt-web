@@ -22,6 +22,23 @@ export const LETTER_CONTENT_WIDTH = LETTER_PAGE_WIDTH_PX - 2 * LETTER_MARGIN_X; 
 /** Usable vertical space for score items (inside top/bottom margins). */
 export const LETTER_CONTENT_HEIGHT = LETTER_PAGE_HEIGHT_PX - 2 * LETTER_MARGIN_Y; // 960
 
+/** Letter page box in CSS pixels (96dpi). Landscape swaps width/height. */
+export function letterPageMetrics(portrait = true): {
+  pageWidth: number;
+  pageHeight: number;
+  contentWidth: number;
+  contentHeight: number;
+} {
+  const pageWidth = portrait ? LETTER_PAGE_WIDTH_PX : LETTER_PAGE_HEIGHT_PX;
+  const pageHeight = portrait ? LETTER_PAGE_HEIGHT_PX : LETTER_PAGE_WIDTH_PX;
+  return {
+    pageWidth,
+    pageHeight,
+    contentWidth: pageWidth - 2 * LETTER_MARGIN_X,
+    contentHeight: pageHeight - 2 * LETTER_MARGIN_Y,
+  };
+}
+
 export type PaginationOptions = {
   /** Max content height per page (default Letter content height). */
   pageContentHeight?: number;
