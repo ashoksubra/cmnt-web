@@ -304,6 +304,7 @@ const TOP_KEYS = new Set([
   "cyclesperrow",
   "rowspacing",
   "cellspacing",
+  "orientation",
   "layout",
   "style",
 ]);
@@ -337,6 +338,7 @@ function translate(raw: YamlMap): string[] {
   let cpr = str(m.cyclesperrow); // also accepted at top level, not just nested
   let rs = str(m.rowspacing);
   let cellSp = str(m.cellspacing);
+  let orientation = str(m.orientation);
   if (isMap(layoutObj)) {
     const lo = lowerKeys(layoutObj);
     const unknownLayout = Object.keys(lo).filter((k) => !LAYOUT_KEYS.has(k));
@@ -352,16 +354,17 @@ function translate(raw: YamlMap): string[] {
     if (cpr === null) cpr = str(lo.cyclesperrow);
     if (rs === null) rs = str(lo.rowspacing);
     if (cellSp === null) cellSp = str(lo.cellspacing);
+    if (orientation === null) orientation = layoutOrientation;
     if (layoutType !== null || layoutWidth !== null) {
       let lb = `Layout: ${layoutType !== null ? layoutType : "Krithi"}`;
       if (layoutWidth?.toLowerCase() === "full") lb += ",FullWidth";
       else if (layoutWidth?.toLowerCase() === "compact") lb += ",Compact";
       out.push(lb);
     }
-    if (layoutOrientation !== null) out.push(`Orientation: ${layoutOrientation}`);
   } else if (layoutObj !== undefined) {
     out.push(`Layout: ${str(layoutObj)}`);
   }
+  if (orientation !== null) out.push(`Orientation: ${orientation}`);
   if (cpr !== null) out.push(`CyclesPerRow: ${cpr}`);
   if (rs !== null) out.push(`RowSpacing: ${rs}`);
   if (cellSp !== null) out.push(`CellSpacing: ${cellSp}`);

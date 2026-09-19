@@ -4,12 +4,9 @@ import type { LayoutItem } from "@cmnt/core/Layout";
 import { layoutSongFitting } from "@cmnt/core/LayoutFitting";
 import { renderScoreSvg } from "@cmnt/render/SvgScore";
 import {
-  LETTER_CONTENT_HEIGHT,
-  LETTER_CONTENT_WIDTH,
   LETTER_MARGIN_X,
   LETTER_MARGIN_Y,
-  LETTER_PAGE_HEIGHT_PX,
-  LETTER_PAGE_WIDTH_PX,
+  letterPageMetrics,
   paginateLayoutItems,
 } from "@cmnt/render/ScorePagination";
 import { scriptFor } from "@cmnt/core/Translit";
@@ -155,6 +152,7 @@ const YAML_SYNTAX_HELP = [
   "                       # TalamDisplay: is only optional roman spelling — not the tala",
   "speed: 0               # DefaultSpeed 0 / 1 / 2 (chapu: 1 note/beat)",
   "language: Tamil",
+  "orientation: landscape # portrait | landscape (File → Export PDF)",
   "layout:",
   "  type: krithi         # krithi | gitam | …",
   "  width: full          # full | compact",
@@ -176,6 +174,7 @@ const CLASSIC_SYNTAX_HELP = [
   "Raagam: Mayamalavagowla",
   "Tala: Adi",
   "DefaultSpeed: 0",
+  "Orientation: Landscape   # or Portrait; File → Export PDF uses this page size",
   "",
   "S: s r g m | p d n s'",
   "L: sa ri ga ma | pa da ni sa   (bars | on L: are ignored)",
@@ -955,29 +954,30 @@ function decorateSvgMarkup(svgMarkup: string): string | null {
  * Letter-paginated SVGs for PDF: cycle-fit layout, section-aligned columns,
  * no orphan section titles at the bottom of a page.
  */
-function buildLetterPdfPages(): string[] | null {
+function buildLetterPdfPages(): { svgs: string[]; portrait: boolean } | null {
   try {
     const forceScript = forceScriptFor(langSelect.value as UiLangOverride);
     const song = parse(sourceInput.value);
+    const page = letterPageMetrics(song.portrait);
     const unitWidthScale = currentSchool.density.unitWidthScale;
     const rowSpacingScale = currentSchool.density.rowSpacingScale;
     const { measureCellWidth, measureGlyph } = createCanvasMetrics({ forceScript });
     const items = layoutSongFitting(song, {
-      targetWidth: Math.max(50, LETTER_CONTENT_WIDTH - ROW_LABEL_GUTTER),
+      targetWidth: Math.max(50, page.contentWidth - ROW_LABEL_GUTTER),
       unitWidthScale,
       measureCellWidth,
     });
     const pages = paginateLayoutItems(items, {
-      pageContentHeight: LETTER_CONTENT_HEIGHT,
+      pageContentHeight: page.contentHeight,
       rowSpacingScale,
     });
     const svgs: string[] = [];
     for (const pageItems of pages) {
       const raw = renderScoreSvg(pageItems, {
-        contentWidth: LETTER_CONTENT_WIDTH,
+        contentWidth: page.contentWidth,
         marginX: LETTER_MARGIN_X,
         marginTop: LETTER_MARGIN_Y,
-        minHeight: LETTER_PAGE_HEIGHT_PX,
+        minHeight: page.pageHeight,
         forceScript,
         unitWidthScale,
         rowSpacingScale,
@@ -991,7 +991,7 @@ function buildLetterPdfPages(): string[] | null {
       if (decorated == null) return null;
       svgs.push(decorated);
     }
-    return svgs;
+    return { svgs, portrait: song.portrait };
   } catch {
     return null;
   }
@@ -1003,11 +1003,13 @@ function buildLetterPdfPages(): string[] | null {
  */
 function exportPdf(): void {
   render(); // keep preview in sync / theme classes applied
-  const pages = buildLetterPdfPages();
-  if (pages == null || pages.length === 0) {
+  const built = buildLetterPdfPages();
+  if (built == null || built.svgs.length === 0) {
     setStatusError("Export PDF failed: nothing rendered yet");
     return;
   }
+  const { svgs: pages, portrait } = built;
+  const pageBox = letterPageMetrics(portrait);
   // Do not pass "noopener" here -- it makes window.open() return null in modern
   // browsers, and we need the handle to write the full SVG and call print().
   const printWin = window.open("", "_blank");
@@ -1019,6 +1021,7 @@ function exportPdf(): void {
   const pageDivs = pages
     .map((svg, i) => `<div class="page${i === pages.length - 1 ? " page-last" : ""}">${svg}</div>`)
     .join("\n");
+  const pageSize = portrait ? "letter portrait" : "letter landscape";
   printWin.document.open();
   printWin.document.write(`<!doctype html>
 <html lang="en">
@@ -1029,18 +1032,18 @@ function exportPdf(): void {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="${PRINT_FONT_LINKS}" rel="stylesheet" />
   <style>
-    @page { size: letter; margin: 0; }
+    @page { size: ${pageSize}; margin: 0; }
     html, body { margin: 0; padding: 0; background: #fff; }
     .page {
-      width: ${LETTER_PAGE_WIDTH_PX}px;
-      height: ${LETTER_PAGE_HEIGHT_PX}px;
+      width: ${pageBox.pageWidth}px;
+      height: ${pageBox.pageHeight}px;
       margin: 0 auto;
       page-break-after: always;
       break-after: page;
       overflow: hidden;
     }
     .page-last { page-break-after: auto; break-after: auto; }
-    .page svg { display: block; width: ${LETTER_PAGE_WIDTH_PX}px; height: ${LETTER_PAGE_HEIGHT_PX}px; }
+    .page svg { display: block; width: ${pageBox.pageWidth}px; height: ${pageBox.pageHeight}px; }
   </style>
 </head>
 <body>
@@ -1070,7 +1073,9 @@ ${pageDivs}
   } else {
     setTimeout(triggerPrint, 350);
   }
-  setStatusOk(`Print dialog: ${pages.length} Letter page(s) — choose “Save as PDF”`);
+  setStatusOk(
+    `Print dialog: ${pages.length} Letter ${portrait ? "portrait" : "landscape"} page(s) — choose “Save as PDF”`,
+  );
 }
 
 // ---- Insert helpers ------------------------------------------------------------

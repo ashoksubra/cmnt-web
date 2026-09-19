@@ -57,6 +57,46 @@ describe("YamlFrontMatter.preprocess", () => {
     expect(headings.some((h) => h.text === "Test Song")).toBe(true);
   });
 
+  it("accepts top-level orientation: and layout.orientation (top-level wins)", () => {
+    const top = [
+      "---",
+      "tala: Adi",
+      "orientation: landscape",
+      "---",
+      "S: s r g m",
+      "",
+    ].join("\n");
+    expect(preprocess(top)).toContain("Orientation: landscape");
+    expect(parse(top).portrait).toBe(false);
+
+    const nested = [
+      "---",
+      "tala: Adi",
+      "layout:",
+      "  type: krithi",
+      "  orientation: Landscape",
+      "---",
+      "S: s r g m",
+      "",
+    ].join("\n");
+    expect(preprocess(nested)).toContain("Orientation: Landscape");
+    expect(parse(nested).portrait).toBe(false);
+
+    const both = [
+      "---",
+      "tala: Adi",
+      "orientation: landscape",
+      "layout:",
+      "  orientation: portrait",
+      "---",
+      "S: s r g m",
+      "",
+    ].join("\n");
+    expect(preprocess(both)).toContain("Orientation: landscape");
+    expect(preprocess(both)).not.toContain("Orientation: portrait");
+    expect(parse(both).portrait).toBe(false);
+  });
+
   it("rejects an unrecognized top-level key with a clear error", () => {
     const text = ["---", "titel: Typo", "tala: Adi", "---", "S: s", ""].join("\n");
     expect(() => parse(text)).toThrow(ParseException);

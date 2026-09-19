@@ -45,6 +45,7 @@ export {
   LETTER_PAGE_HEIGHT_PX,
   LETTER_MARGIN_X,
   LETTER_MARGIN_Y,
+  letterPageMetrics,
 } from "./render/ScorePagination.js";
 export type { PaginationOptions } from "./render/ScorePagination.js";
 export {

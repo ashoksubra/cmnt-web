@@ -81,4 +81,13 @@ describe("CmntParser", () => {
     expect(semi.phraseHyphens).toBe(2);
     expect(semi.displayLabel()).toBe(";");
   });
+
+  it("honors Orientation: Landscape even after Tala:", () => {
+    const song = parse(["Tala: Adi", "Orientation: Landscape", "DefaultSpeed: 0", "S: s r g m", ""].join("\n"));
+    expect(song.portrait).toBe(false);
+    const tight = parse(["Tala: Adi", "Orientation:Landscape", "S: s r g m", ""].join("\n"));
+    expect(tight.portrait).toBe(false);
+    const port = parse(["Orientation: Portrait", "Tala: Adi", "S: s r g m", ""].join("\n"));
+    expect(port.portrait).toBe(true);
+  });
 });
