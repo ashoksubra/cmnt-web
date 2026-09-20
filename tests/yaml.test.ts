@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { preprocess } from "@cmnt/core/YamlFrontMatter";
 import { parse, ParseException } from "@cmnt/core/CmntParser";
 import { Heading } from "@cmnt/model/Heading";
+import { SongBlock } from "@cmnt/model/SongBlock";
 
 const fixtures = resolve(import.meta.dirname, "../fixtures");
 
@@ -133,6 +134,31 @@ describe("YamlFrontMatter.preprocess", () => {
     expect(song.tala.aksharaCount).toBe(7);
     expect(song.tala.predefName).toBe("MisraChapu");
     expect(song.effectiveDefaultSpeed).toBe(0);
+  });
+
+  it("emits LyricPrefs font+size and applies them on the notation block", () => {
+    const text = [
+      "---",
+      "tala: Adi",
+      "style:",
+      "  lyric:",
+      "    font: Noto Sans Tamil",
+      "    size: 11",
+      "  swara: { size: 14, font: Georgia }",
+      "---",
+      "S: s r g m",
+      "L: sa ri ga ma",
+      "",
+    ].join("\n");
+    const out = preprocess(text);
+    expect(out).toContain("LyricPrefs: 11,Noto Sans Tamil");
+    expect(out).toContain("SwaraPrefs: 14,Georgia");
+    const song = parse(text);
+    const block = song.parts.find((p): p is SongBlock => p instanceof SongBlock);
+    expect(block?.lyricFont).toBe("Noto Sans Tamil");
+    expect(block?.lyricFontSize).toBe("11");
+    expect(block?.swaraFont).toBe("Georgia");
+    expect(block?.swaraFontSize).toBe("14");
   });
 });
 

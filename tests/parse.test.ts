@@ -38,6 +38,8 @@ describe("CmntParser", () => {
     expect(block.notations[0]!.swara.label.toLowerCase()).toBe("s");
     expect(block.notations[0]!.lyrics[0]).toBe("sa");
     expect(block.notations[7]!.swara.octave).toBe(1);
+    expect(block.lyricFontSize).toBeNull();
+    expect(block.swaraFontSize).toBeNull();
   });
 
   it("parses maha_ganapatim sample", () => {

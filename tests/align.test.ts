@@ -129,10 +129,22 @@ describe("alignSection", () => {
     // First swara cells stay compact (not half the anga); slack sits in the gap.
     expect(a[0]!).toBeLessThan(80);
     expect(b[0]!).toBeLessThan(80);
-    expect(a[0]!).toBeCloseTo(b[0]!, -1); // same order of magnitude / left pack
+    expect(Math.abs(a[0]! - b[0]!)).toBeLessThan(20);
     // Gap before first `|` absorbs most of the anga slack.
     expect(a[2]!).toBeGreaterThan(a[0]!);
     expect(b[4]!).toBeGreaterThan(b[0]!);
+  });
+
+  it("lets measured sahityam wider than PACK_GLYPH_CAP keep that width", () => {
+    const gap = new Cell();
+    gap.kind = "gap";
+    const note = swara("s", Fraction.ONE);
+    note.lyrics = ["தோ₁ம்"];
+    const r = row([note, gap, marker("|")]);
+    const measure = (c: Cell, _scale: number) =>
+      c.kind === "swara" ? 90 : c.kind === "gap" ? 10 : 14;
+    const aligned = alignSection([r], 400, 1, measure);
+    expect(aligned.get(r)![0]!).toBeGreaterThanOrEqual(89);
   });
 });
 

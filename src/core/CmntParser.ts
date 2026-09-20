@@ -68,6 +68,8 @@ class Prefs {
   fontSize: string;
   fontName: string | null = null;
   bold = false;
+  /** True when a LyricPrefs/SwaraPrefs/GamakaPrefs line set `size`. */
+  sizeExplicit = false;
   constructor(fontSize: string) {
     this.fontSize = fontSize;
   }
@@ -211,15 +213,15 @@ class Parser {
     const block = new SongBlock();
     block.heading = this.curNotationHeading;
     block.language = this.curLang;
-    block.swaraFontSize = this.swaraPrefs.fontSize;
-    block.lyricFontSize = this.lyricPrefs.fontSize;
+    block.swaraFontSize = this.swaraPrefs.sizeExplicit ? this.swaraPrefs.fontSize : null;
+    block.lyricFontSize = this.lyricPrefs.sizeExplicit ? this.lyricPrefs.fontSize : null;
     block.swaraColor = this.swaraPrefs.color;
     block.lyricColor = this.lyricPrefs.color;
     block.swaraFont = this.swaraPrefs.fontName;
     block.lyricFont = this.lyricPrefs.fontName;
     block.swaraBold = this.swaraPrefs.bold;
     block.lyricBold = this.lyricPrefs.bold;
-    block.gamakaFontSize = this.gamakaPrefs.fontSize;
+    block.gamakaFontSize = this.gamakaPrefs.sizeExplicit ? this.gamakaPrefs.fontSize : null;
     block.gamakaColor = this.gamakaPrefs.color;
     block.nLyricLines = this.lyrics.length;
     this.curNotationHeading = null;
@@ -922,7 +924,10 @@ class Parser {
               : key === "headingprefs"
                 ? this.headingPrefs
                 : this.gamakaPrefs;
-        if (fontSize !== null) prefs.fontSize = fontSize;
+        if (fontSize !== null) {
+          prefs.fontSize = fontSize;
+          prefs.sizeExplicit = true;
+        }
         if (color !== null) prefs.color = color;
         if (fontName !== null) prefs.fontName = fontName;
         if (bold) prefs.bold = true;

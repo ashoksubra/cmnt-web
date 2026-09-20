@@ -37,7 +37,7 @@ import { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "@cmnt/theme/schoo
 import type { SchoolId, SchoolPreset, UiLangOverride } from "@cmnt/theme/schools";
 import { buildMenubar, type MenuItem } from "./menubar";
 import { HELP_COMPOSER, HELP_YAML, type HelpTopic } from "./helpTopics";
-import { createCanvasMetrics } from "./canvasMeasure";
+import { createCanvasMetrics, typePrefsFromSong } from "./canvasMeasure";
 import stylesCssRaw from "./styles.css?raw";
 
 function isAudioPlayUnlocked(): boolean {
@@ -152,19 +152,25 @@ const YAML_SYNTAX_HELP = [
   "                       # TalamDisplay: is only optional roman spelling — not the tala",
   "speed: 0               # DefaultSpeed 0 / 1 / 2 (chapu: 1 note/beat)",
   "language: Tamil",
-  "orientation: landscape # portrait | landscape (File → Export PDF)",
+  "orientation: landscape # portrait | landscape (File → Export PDF Letter)",
   "layout:",
   "  type: krithi         # krithi | gitam | …",
   "  width: full          # full | compact",
   "style:",
-  "  swara: { color: blue, size: 13 }",
-  "  lyric: { color: black, size: 13 }",
+  "  swara: { color: blue, size: 13, font: Georgia }",
+  "  lyric:",
+  "    color: black",
+  "    size: 11            # also sets sahityam cell width (uncrowds dense Tamil)",
+  "    font: Noto Sans Tamil",
   "---",
   "",
   "Then classic body lines:",
   "Pallavi:",
   "S: s r g m",
   "L: sa ri ga ma",
+  "",
+  "Help → YAML front matter has every key. LyricPrefs: 11,Noto Sans Tamil works",
+  "without --- as well.",
 ].join("\n");
 
 const CLASSIC_SYNTAX_HELP = [
@@ -175,6 +181,8 @@ const CLASSIC_SYNTAX_HELP = [
   "Tala: Adi",
   "DefaultSpeed: 0",
   "Orientation: Landscape   # or Portrait; File → Export PDF uses this page size",
+  "LyricPrefs: 11,Noto Sans Tamil   # size + font; sahityam cell widths follow",
+  "SwaraPrefs: 14,Georgia",
   "",
   "S: s r g m | p d n s'",
   "L: sa ri ga ma | pa da ni sa   (bars | on L: are ignored)",
@@ -624,7 +632,10 @@ function renderScoreAtWidth(
     ? parse(sourceInput.value, { live: true, caretLine: caretLineNumber() })
     : parse(sourceInput.value);
   const unitWidthScale = currentSchool.density.unitWidthScale;
-  const { measureCellWidth, measureGlyph } = createCanvasMetrics({ forceScript });
+  const { measureCellWidth, measureGlyph } = createCanvasMetrics({
+    forceScript,
+    ...typePrefsFromSong(song),
+  });
   // Cycle-fit only (JAR layoutFittingLetter). Do not mid-wrap cells — short
   // fragments get full-width stretched and look orphaned in PDF.
   const items = layoutSongFitting(song, {
@@ -961,7 +972,10 @@ function buildLetterPdfPages(): { svgs: string[]; portrait: boolean } | null {
     const page = letterPageMetrics(song.portrait);
     const unitWidthScale = currentSchool.density.unitWidthScale;
     const rowSpacingScale = currentSchool.density.rowSpacingScale;
-    const { measureCellWidth, measureGlyph } = createCanvasMetrics({ forceScript });
+    const { measureCellWidth, measureGlyph } = createCanvasMetrics({
+      forceScript,
+      ...typePrefsFromSong(song),
+    });
     const items = layoutSongFitting(song, {
       targetWidth: Math.max(50, page.contentWidth - ROW_LABEL_GUTTER),
       unitWidthScale,

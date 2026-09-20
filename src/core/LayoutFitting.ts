@@ -67,7 +67,7 @@ export function wrapVisualRowToWidth(
   measure: CellWidthMeasurer = defaultMeasureCellWidth,
 ): VisualRow[] {
   if (row.cells.length === 0) return [row];
-  const widths = row.cells.map((c) => measure(c, unitWidthScale));
+  const widths = row.cells.map((c) => measure(c, unitWidthScale, row));
   const total = widths.reduce((a, b) => a + b, 0);
   if (total <= targetWidth + 0.5) return [row];
 
@@ -132,7 +132,7 @@ export function maxNaturalRowWidth(
   for (const it of items) {
     if (!(it instanceof VisualRow)) continue;
     let sum = 0;
-    for (const c of it.cells) sum += measure(c, unitWidthScale);
+    for (const c of it.cells) sum += measure(c, unitWidthScale, it);
     max = Math.max(max, sum);
   }
   return max;
