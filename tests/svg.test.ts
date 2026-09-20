@@ -177,4 +177,26 @@ describe("renderScoreSvg", () => {
     const narrow = renderScoreSvg(items, { contentWidth: 400 });
     expect(narrow).toContain('width="496"');
   });
+
+  it("applies LyricPrefs font and size on sahityam text", () => {
+    const song = parse(
+      [
+        "Tala: Adi",
+        "DefaultSpeed: 0",
+        "LyricPrefs: 11,Noto Sans Tamil",
+        "S: s r g m",
+        "L: sa ri ga ma",
+        "",
+      ].join("\n"),
+    );
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).toMatch(/class="cmnt-lyric"[^>]*style="[^"]*font-size:11px/);
+    expect(svg).toMatch(/class="cmnt-lyric"[^>]*style="[^"]*font-family:[^"]*Noto Sans Tamil/);
+  });
+
+  it("does not force a default lyric size when LyricPrefs is omitted", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r\nL: sa ri\n");
+    const svg = renderScoreSvg(layoutSong(song));
+    expect(svg).not.toMatch(/class="cmnt-lyric"[^>]*font-size/);
+  });
 });

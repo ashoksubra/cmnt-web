@@ -38,7 +38,7 @@ export type SvgScoreOptions = {
    */
   forceScript?: Script;
   /**
-   * Multiplies the duration-based swara cell width (see `UNIT_WIDTH`). Lets
+   * Multiplies the duration-based swara cell width (see `PACK_UNIT_WIDTH`). Lets
    * "school" presets (`src/theme/schools.ts`) request denser/looser column
    * spacing without changing the alignment algorithm. Default 1.
    */
@@ -67,8 +67,8 @@ export type SvgScoreOptions = {
   measureGlyph?: GlyphMeasurer;
 };
 
-/** Measures one layout cell's natural width in px. */
-export type CellWidthMeasurer = (cell: Cell, unitWidthScale: number) => number;
+/** Measures one layout cell's natural width in px. `row` carries YAML font prefs. */
+export type CellWidthMeasurer = (cell: Cell, unitWidthScale: number, row?: VisualRow) => number;
 
 /** Canvas/FontMetrics-style glyph box, in px, for a string drawn at x=0 (start). */
 export type GlyphMetrics = {
@@ -107,12 +107,15 @@ const DEFAULT_MARGIN_TOP = 32;
 /** Fixed gutter reserved for row labels like "1)" so columns start at the same x. */
 const ROW_LABEL_GUTTER = 36;
 
-/** Px-per-whole-akshara for swara cells (duration-weighted, no font metrics). */
-const UNIT_WIDTH = 160;
 const MIN_SWARA_WIDTH = 30;
 const MARKER_WIDTH = 14;
 const GAP_WIDTH = 10;
 const GATI_WIDTH = 40;
+
+/** Compact px-per-whole-akshara for duration slots and left-pack. */
+const PACK_UNIT_WIDTH = 44;
+/** Cap on non-swara glyph-driven cells when packing left. */
+const PACK_GLYPH_CAP = 58;
 
 const DEFAULT_SWARA_SIZE = 15;
 const DEFAULT_LYRIC_SIZE = 12;
@@ -294,6 +297,7 @@ function renderHeading(
   if (h.bold) styles.push("font-weight:bold");
   if (h.italic) styles.push("font-style:italic");
   if (h.color) styles.push(`fill:${escapeAttr(h.color)}`);
+  if (h.font) styles.push(`font-family:${escapeAttr(cssFontFamily(h.font))}`);
 
   const anchor = h.alignment === "center" ? "middle" : h.alignment === "right" ? "end" : "start";
   const x =
@@ -319,7 +323,10 @@ export function defaultMeasureCellWidth(c: Cell, unitWidthScale = 1): number {
   if (c.kind === "marker") return MARKER_WIDTH;
   if (c.kind === "gap") return GAP_WIDTH;
   if (c.kind === "gati") return GATI_WIDTH;
-  return Math.max(MIN_SWARA_WIDTH, c.duration.doubleValue() * UNIT_WIDTH * unitWidthScale);
+  // Compact duration slot (same scale as left-pack). Canvas measurers return
+  // glyph width instead; packing then takes max(compact, glyph) so sahityam
+  // can grow without a 160px duration estimate blowing the row.
+  return Math.max(MIN_SWARA_WIDTH, c.duration.doubleValue() * PACK_UNIT_WIDTH * unitWidthScale);
 }
 
 /**
@@ -364,11 +371,6 @@ function spanDuration(row: VisualRow, s: Span): number {
   return d;
 }
 
-/** Compact px-per-akshara used when left-packing notes inside an anga column. */
-const PACK_UNIT_WIDTH = 44;
-/** Cap on how wide a single glyph-driven cell can grow when packing left. */
-const PACK_GLYPH_CAP = 58;
-
 /**
  * Spread a span to `target` width, left-packing notes inside content spans.
  *
@@ -397,12 +399,10 @@ function distributeSpan(row: VisualRow, natural: number[], out: number[], start:
     if (c.kind === "gap") {
       w = Math.min(nat, GAP_WIDTH);
     } else if (c.kind === "swara") {
-      // `natural` is often duration*UNIT_WIDTH (large). For left-pack use a compact
-      // duration slot, only growing for wide glyphs — never the full stretch width.
+      // Compact duration slot; grow only for wide measured sahityam/swara glyphs.
       const dur = Math.max(c.duration.doubleValue(), 1 / 64);
       const compact = Math.max(MIN_SWARA_WIDTH, dur * PACK_UNIT_WIDTH);
-      const glyph = Math.min(nat, PACK_GLYPH_CAP);
-      w = Math.max(compact, glyph);
+      w = Math.max(compact, nat);
     } else {
       w = Math.min(nat, PACK_GLYPH_CAP);
     }
@@ -447,7 +447,7 @@ export function alignSection(
   const allSpans: Span[][] = [];
 
   for (const row of rows) {
-    const cw = row.cells.map((c) => measure(c, unitWidthScale));
+    const cw = row.cells.map((c) => measure(c, unitWidthScale, row));
     natural.set(row, cw);
     const spans = splitSpans(row, cw);
     allSpans.push(spans);
@@ -668,9 +668,22 @@ function renderRow(
     );
   }
 
-  const swaraStyle = row.swaraColor ? ` style="fill:${escapeAttr(row.swaraColor)}"` : "";
-  const lyricStyle = row.lyricColor ? ` style="fill:${escapeAttr(row.lyricColor)}"` : "";
-  const gamakaStyle = row.gamakaColor ? ` style="fill:${escapeAttr(row.gamakaColor)}"` : "";
+  const swaraStyle = roleTextStyle({
+    color: row.swaraColor,
+    font: row.swaraFont,
+    size: row.swaraFontSize,
+    bold: row.swaraBold,
+  });
+  const lyricStyle = roleTextStyle({
+    color: row.lyricColor,
+    font: row.lyricFont,
+    size: row.lyricFontSize,
+    bold: row.lyricBold,
+  });
+  const gamakaStyle = roleTextStyle({
+    color: row.gamakaColor,
+    size: row.gamakaFontSize,
+  });
 
   // Sangathi numbers ("1." / "2.") sit in the left gutter; every row — numbered
   // or not — starts note content at the same x so continuations stay left-aligned.
@@ -788,6 +801,29 @@ function renderRow(
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+/** Quote a YAML `font:` family so CSS `font-family` accepts names with spaces. */
+export function cssFontFamily(name: string): string {
+  const t = name.trim();
+  if (t === "") return t;
+  if (t.includes(",") || /^['"]/.test(t)) return t;
+  return `'${t.replace(/'/g, "")}'`;
+}
+
+function roleTextStyle(opts: {
+  color?: string | null;
+  font?: string | null;
+  size?: string | null;
+  bold?: boolean;
+}): string {
+  const parts: string[] = [];
+  if (opts.color) parts.push(`fill:${escapeAttr(opts.color)}`);
+  if (opts.font) parts.push(`font-family:${escapeAttr(cssFontFamily(opts.font))}`);
+  const sizeNum = parseFloat(opts.size ?? "");
+  if (Number.isFinite(sizeNum) && sizeNum > 0) parts.push(`font-size:${fmt(sizeNum)}px`);
+  if (opts.bold) parts.push("font-weight:700");
+  return parts.length ? ` style="${parts.join(";")}"` : "";
 }
 
 function escapeXml(s: string): string {
