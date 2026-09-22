@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "@cmnt/core/CmntParser";
-import { layoutSong } from "@cmnt/core/Layout";
-import { renderScoreSvg } from "@cmnt/render/SvgScore";
+import { layoutSong, VisualRow } from "@cmnt/core/Layout";
+import { renderScoreSvg, rowVerticalMetrics } from "@cmnt/render/SvgScore";
 
 const fixtures = resolve(import.meta.dirname, "../fixtures");
 
@@ -176,6 +176,26 @@ describe("renderScoreSvg", () => {
 
     const narrow = renderScoreSvg(items, { contentWidth: 400 });
     expect(narrow).toContain('width="496"');
+  });
+
+  it("omits the sahityam band on swara-only rows (cittaswara / muktayi)", () => {
+    const withLyrics = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r g m\nL: sa ri ga ma\n");
+    const swaraOnly = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r g m\n");
+    const lyricRow = layoutSong(withLyrics).find((it): it is VisualRow => it instanceof VisualRow)!;
+    const swaraRow = layoutSong(swaraOnly).find((it): it is VisualRow => it instanceof VisualRow)!;
+    const lyricH = rowVerticalMetrics(lyricRow).rowHeight;
+    const swaraH = rowVerticalMetrics(swaraRow).rowHeight;
+    expect(rowVerticalMetrics(swaraRow).maxLyricLines).toBe(0);
+    expect(swaraH).toBeLessThan(lyricH - 10);
+    const svg = renderScoreSvg(layoutSong(swaraOnly));
+    expect(svg).not.toContain('class="cmnt-lyric"');
+  });
+
+  it("keeps lyric space when an S: line has sahityam (padavarnam)", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r g m\nL: sa ri ga ma\n");
+    const row = layoutSong(song).find((it): it is VisualRow => it instanceof VisualRow)!;
+    expect(rowVerticalMetrics(row).maxLyricLines).toBe(1);
+    expect(renderScoreSvg(layoutSong(song))).toContain('class="cmnt-lyric"');
   });
 
   it("applies LyricPrefs font and size on sahityam text", () => {

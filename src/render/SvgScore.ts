@@ -121,16 +121,34 @@ const DEFAULT_SWARA_SIZE = 15;
 const DEFAULT_LYRIC_SIZE = 12;
 const DEFAULT_GAMAKA_SIZE = 10;
 
+const BLANK_LYRICS = new Set(["", ".", "-", "_", " "]);
+
+function isBlankLyric(lyric: string | undefined): boolean {
+  if (lyric == null) return true;
+  return BLANK_LYRICS.has(lyric) || lyric.trim() === "";
+}
+
+/** How many stacked sahityam lines this row actually prints (0 for swara-only). */
+export function printedLyricLineCount(row: VisualRow): number {
+  let max = 0;
+  for (const c of row.cells) {
+    if (c.kind !== "swara") continue;
+    for (let li = 0; li < c.lyrics.length; li++) {
+      if (!isBlankLyric(c.lyrics[li])) max = Math.max(max, li + 1);
+    }
+  }
+  return max;
+}
+
 /** Vertical metrics for one score row. Keep pagination in sync via this helper. */
 export function rowVerticalMetrics(row: VisualRow, rowSpacingScale = 1) {
   const swaraSize = parseFloat(row.swaraFontSize ?? "") || DEFAULT_SWARA_SIZE;
   const lyricSize = parseFloat(row.lyricFontSize ?? "") || DEFAULT_LYRIC_SIZE;
   const gamakaSize = parseFloat(row.gamakaFontSize ?? "") || DEFAULT_GAMAKA_SIZE;
-  let maxLyricLines = 1;
+  const maxLyricLines = printedLyricLineCount(row);
   let hasMandra = false;
   for (const c of row.cells) {
     if (c.kind !== "swara") continue;
-    maxLyricLines = Math.max(maxLyricLines, Math.max(1, c.lyrics.length));
     if (c.octave < 0) hasMandra = true;
   }
   const octaveGap = Math.max(4, swaraSize * 0.22);
@@ -145,7 +163,14 @@ export function rowVerticalMetrics(row: VisualRow, rowSpacingScale = 1) {
     ? Math.max(Math.max(swaraSize, lyricSize) * 2.2, lowerStayiGap + dotSize + lyricSize * 0.7)
     : swaraToLyricBase;
   const topClearance = swaraSize + octaveGap + gamakaSize + gamakaGap * 2 + 8;
-  const bottomClearance = swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight;
+  // Cittaswara / muktayi (and any S: without a real L:) skip the sahityam band.
+  // Padavarnam rows that do carry lyrics keep the full swara-to-lyric gap.
+  const bottomClearance =
+    maxLyricLines > 0
+      ? swaraToLyric + lyricSize + (maxLyricLines - 1) * lyricLineHeight
+      : hasMandra
+        ? lowerStayiGap + dotSize + Math.max(4, swaraSize * 0.2)
+        : Math.max(8, swaraSize * 0.35);
   const rowBottomPad = Math.min(
     Math.max(6, lyricSize * 0.35) * row.rowSpacing * rowSpacingScale,
     Math.max(swaraSize, lyricSize) * 1.5,
@@ -600,8 +625,6 @@ function renderClusterBracket(
     `<line class="cmnt-cluster-bracket" x1="${fmt(x2)}" y1="${fmt(bracketY)}" x2="${fmt(x2)}" y2="${fmt(bracketY + tick)}" />`,
   ].join("\n");
 }
-
-const BLANK_LYRICS = new Set(["", ".", "-", "_", " "]);
 
 /** Next non-blank lyric that continues this word (skips markers, rests, and karvai). */
 function nextSameWordLyric(

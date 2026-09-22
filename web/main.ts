@@ -351,19 +351,74 @@ function updateDocTitle(): void {
   document.title = `${documentDirty ? "• " : ""}${currentFileName} — CMNT Web`;
 }
 
+const CURRENT_DRAFT_KEY = "cmnt.currentDraft.v1";
+const PREVIOUS_SONG_KEY = "cmnt.previousSong.v1";
+
+type StoredSong = { text: string; fileName: string; savedAt: number };
+
+function readStoredSong(key: string): StoredSong | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null || raw === "") return null;
+    const o = JSON.parse(raw) as StoredSong;
+    if (typeof o.text !== "string" || o.text.trim() === "") return null;
+    const fileName = typeof o.fileName === "string" && o.fileName.trim() !== "" ? o.fileName : "Untitled.txt";
+    return { text: o.text, fileName, savedAt: Number(o.savedAt) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSong(key: string, text: string, fileName: string): void {
+  if (!text.trim()) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({ text, fileName, savedAt: Date.now() } satisfies StoredSong));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
+function persistCurrentDraft(): void {
+  writeStoredSong(CURRENT_DRAFT_KEY, sourceInput.value, currentFileName);
+}
+
+/** Keep the outgoing editor so File → Restore previous song can undo a switch. */
+function stashOutgoingSong(incomingText: string): void {
+  const outgoing = sourceInput.value;
+  if (!outgoing.trim() || outgoing === incomingText) return;
+  writeStoredSong(PREVIOUS_SONG_KEY, outgoing, currentFileName);
+}
+
+function restorePreviousSong(): void {
+  const prev = readStoredSong(PREVIOUS_SONG_KEY);
+  if (prev == null) {
+    setStatusHint("No previous song in this browser. File → Save (.txt) keeps a copy on your disk.");
+    return;
+  }
+  if (documentDirty && !window.confirm(`Replace the current editor with “${prev.fileName}”?`)) return;
+  stashOutgoingSong(prev.text);
+  setDocument(prev.text, prev.fileName, null);
+  markDirty();
+  persistCurrentDraft();
+  setStatusOk(`Restored ${prev.fileName} — File → Save (.txt) to keep it on disk`);
+}
+
 function markDirty(): void {
   if (!documentDirty) {
     documentDirty = true;
     updateDocTitle();
   }
+  persistCurrentDraft();
 }
 
 function markClean(): void {
   documentDirty = false;
   updateDocTitle();
+  persistCurrentDraft();
 }
 
 function setDocument(text: string, fileName: string, handle: FileSystemFileHandle | null = null): void {
+  stashOutgoingSong(text);
   clearHeaderOverrides();
   sourceInput.value = text;
   currentFileName = fileName.endsWith(".txt") || fileName.endsWith(".cmnt") ? fileName : `${fileName}.txt`;
@@ -1591,6 +1646,7 @@ function buildAppMenus(): void {
         { label: "Open…", shortcut: `${mod}O`, action: openFileDialog },
         { label: "Save (.txt)", shortcut: `${mod}S`, action: () => void saveFile(false) },
         { label: "Save As…", shortcut: `${mod}⇧S`, action: () => void saveFile(true) },
+        { label: "Restore previous song", action: restorePreviousSong },
         { separator: true },
         { label: "Update Preview", shortcut: `${mod}Enter`, action: render },
         { label: "Open Sample", submenu: sampleMenuItems() },
@@ -1857,8 +1913,21 @@ initPaneSplitter();
 applyAudioPlayVisible(readStoredAudioPlayVisible(), false);
 refreshAppMenus();
 updateDocTitle();
-sourceInput.value = FIXTURES[fixtureSelect.value] ?? "";
-currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;
-markClean();
+{
+  const fixtureText = FIXTURES[fixtureSelect.value] ?? "";
+  const draft = readStoredSong(CURRENT_DRAFT_KEY);
+  if (draft != null && draft.text !== fixtureText) {
+    sourceInput.value = draft.text;
+    currentFileName = draft.fileName.endsWith(".txt") || draft.fileName.endsWith(".cmnt")
+      ? draft.fileName
+      : `${draft.fileName}.txt`;
+    markDirty();
+    setStatusHint(`Restored unsaved ${currentFileName} from this browser — File → Save (.txt) to keep it`);
+  } else {
+    sourceInput.value = fixtureText;
+    currentFileName = `${fixtureSelect.value || "Untitled"}.txt`;
+    markClean();
+  }
+}
 updateSyntaxHelp();
 applySchool(schoolSelect.value as SchoolId);
