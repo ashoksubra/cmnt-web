@@ -19,7 +19,7 @@ import {
   type GlyphMetrics,
 } from "@cmnt/render/SvgScore";
 
-const BLANK = new Set(["", ".", "-", "_", " "]);
+const HIDDEN_LYRICS = new Set(["", ".", "_", " "]);
 
 const SCRIPT_STACK =
   '"Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans", Georgia, serif';
@@ -126,7 +126,7 @@ export function createCanvasMetrics(opts: CanvasMetricOpts): {
     const lyricPad = Math.max(8, lyricSize * 0.55);
     for (let li = 0; li < c.lyrics.length; li++) {
       const lyric = c.lyrics[li]!;
-      if (BLANK.has(lyric)) continue;
+      if (HIDDEN_LYRICS.has(lyric) || lyric.trim() === "") continue;
       const wordStart = li < c.lyricWordStart.length ? c.lyricWordStart[li]! : true;
       const display = script != null ? transliterate(lyric, script, wordStart) : lyric;
       const box = measureAt(display, lyricFont, lyricSize * 1.15, lyricWeight);

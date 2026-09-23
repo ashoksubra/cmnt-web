@@ -191,6 +191,24 @@ describe("renderScoreSvg", () => {
     expect(svg).not.toContain('class="cmnt-lyric"');
   });
 
+  it("draws L: - as a hyphen and still reserves the sahityam band", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: sA , n\nL: sa - ra\n");
+    const row = layoutSong(song).find((it): it is VisualRow => it instanceof VisualRow)!;
+    expect(rowVerticalMetrics(row).maxLyricLines).toBe(1);
+    const svg = renderScoreSvg(layoutSong(song));
+    const lyrics = [...svg.matchAll(/class="cmnt-lyric"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    expect(lyrics).toContain("-");
+    expect(lyrics).toContain("sa");
+    expect(lyrics).toContain("ra");
+  });
+
+  it("leaves L: . and _ as empty sahityam slots", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r g m\nL: sa . _ ma\n");
+    const svg = renderScoreSvg(layoutSong(song));
+    const lyrics = [...svg.matchAll(/class="cmnt-lyric"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    expect(lyrics).toEqual(["sa", "ma"]);
+  });
+
   it("keeps lyric space when an S: line has sahityam (padavarnam)", () => {
     const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: s r g m\nL: sa ri ga ma\n");
     const row = layoutSong(song).find((it): it is VisualRow => it instanceof VisualRow)!;
