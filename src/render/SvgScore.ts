@@ -121,11 +121,18 @@ const DEFAULT_SWARA_SIZE = 15;
 const DEFAULT_LYRIC_SIZE = 12;
 const DEFAULT_GAMAKA_SIZE = 10;
 
-const BLANK_LYRICS = new Set(["", ".", "-", "_", " "]);
+/** Hidden L: slots. A lone "-" is sahityam and is drawn (karvai / empty-looking cells). */
+const HIDDEN_LYRICS = new Set(["", ".", "_", " "]);
 
 function isBlankLyric(lyric: string | undefined): boolean {
   if (lyric == null) return true;
-  return BLANK_LYRICS.has(lyric) || lyric.trim() === "";
+  const t = lyric.trim();
+  return t === "" || HIDDEN_LYRICS.has(lyric);
+}
+
+/** Drawn hyphen; skip it when looking for the next real syllable. */
+function isLyricHyphen(lyric: string): boolean {
+  return lyric === "-";
 }
 
 /** How many stacked sahityam lines this row actually prints (0 for swara-only). */
@@ -641,8 +648,8 @@ function nextSameWordLyric(
       const n = cells[j]!;
       if (n.kind !== "swara") continue;
       const lyric = lyricLine < n.lyrics.length ? n.lyrics[lyricLine]! : "";
-      const blank = BLANK_LYRICS.has(lyric) || lyric.trim() === "";
-      if (blank) {
+      if (isLyricHyphen(lyric)) continue;
+      if (isBlankLyric(lyric)) {
         if (n.isSustain || n.isRest) continue;
         return null;
       }
@@ -792,7 +799,7 @@ function renderRow(
 
       for (let li = 0; li < maxLyricLines; li++) {
         const lyric = li < c.lyrics.length ? c.lyrics[li]! : "";
-        if (BLANK_LYRICS.has(lyric)) continue;
+        if (isBlankLyric(lyric)) continue;
         const wordStart = li < c.lyricWordStart.length ? c.lyricWordStart[li]! : true;
         // Match JAR NotationCanvas: per-note lyrics go through transliterate(),
         // not transliterateText(), so @/!/~n/#n markers stay on the syllable.
