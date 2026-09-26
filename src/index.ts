@@ -122,6 +122,32 @@ export {
   SANKARABHARANAM_GAMAKAS,
 } from "./core/RagaGamakas.js";
 export type { GamakaAtom, RagaGamakaTable, GamakaContext } from "./core/RagaGamakas.js";
+export {
+  SSP_GAMAKAS,
+  planGamaka,
+  parsePhrase,
+  scaleStep,
+  stepMidi,
+  formatScaleStep,
+  formatGamakaPath,
+  sspGamaka,
+  isSspGamakaId,
+  SWARA_LETTERS,
+  SSP_GAMAKA_IDS,
+  MAX_PHRASE_NOTES,
+} from "./core/SspGamakaModel.js";
+export type {
+  SspGamaka,
+  SspGamakaId,
+  SwaraLetter,
+  PhraseNote,
+  ScaleStep,
+  GamakaContour,
+  GamakaModelRequest,
+  GamakaDirection,
+  GamakaScope,
+  ContourPoint,
+} from "./core/SspGamakaModel.js";
 export { defaultMeasureCellWidth, glyphInkCenter } from "./render/SvgScore.js";
 export type { CellWidthMeasurer, GlyphMeasurer, GlyphMetrics } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
