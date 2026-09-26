@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CMNT Web — Gamaka modeler</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="gamaka-app">
+    <header class="app-header">
+      <div class="app-header-row">
+        <h1>CMNT Web <span class="app-header-sub">Gamaka modeler</span></h1>
+        <a class="app-header-link" href="./index.html">Composer</a>
+        <div class="app-header-note">Sangita Sampradaya Pradarsini</div>
+      </div>
+    </header>
+
+    <div class="gamaka-shell">
+      <aside class="gamaka-aside">
+        <p class="gamaka-aside-note">Fifteen gamakas, with the splits Dikshitar gives symbols for.</p>
+        <div id="gamaka-list" class="gamaka-list" role="listbox" aria-label="Gamakas"></div>
+      </aside>
+
+      <section class="gamaka-main">
+        <p id="gamaka-summary" class="gamaka-summary"></p>
+
+        <div class="gamaka-controls">
+          <label class="field">
+            <span>Melakarta</span>
+            <select id="mela"></select>
+          </label>
+          <label class="field">
+            <span>Shruti</span>
+            <select id="shruti"></select>
+          </label>
+          <label class="field">
+            <span>Sa octave</span>
+            <select id="sa-octave">
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Swara</span>
+            <select id="swara">
+              <option value="s">S</option>
+              <option value="r">R</option>
+              <option value="g">G</option>
+              <option value="m">M</option>
+              <option value="p">P</option>
+              <option value="d">D</option>
+              <option value="n">N</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Sthayi</span>
+            <select id="sthayi">
+              <option value="-2">Anumandra</option>
+              <option value="-1">Mandra</option>
+              <option value="0" selected>Madhya</option>
+              <option value="1">Tara</option>
+              <option value="2">Atitara</option>
+            </select>
+          </label>
+          <label class="field gamaka-phrase-field">
+            <span>Note group (up to 8)</span>
+            <input
+              id="phrase"
+              type="text"
+              placeholder="s r g m p d n s'"
+              spellcheck="false"
+              autocomplete="off"
+              title="Up to 8 swaras. Leave this empty to use Swara and the step count. n. is mandra, s' is tara. A jaru also sounds the scale notes between the ones you name."
+            />
+          </label>
+          <label class="field" id="direction-field">
+            <span>Direction</span>
+            <select id="direction">
+              <option value="arohana">Arohana</option>
+              <option value="avarohana">Avarohana</option>
+            </select>
+          </label>
+          <label class="field" id="span-field">
+            <span id="span-label">Scale steps</span>
+            <input id="span" type="number" min="1" max="7" step="1" value="2" />
+          </label>
+          <label class="field">
+            <span>Duration (aksharakalas)</span>
+            <input id="aksharas" type="number" min="1" max="16" step="1" value="2" />
+          </label>
+          <label class="field">
+            <span>Tempo (BPM)</span>
+            <input id="bpm" type="number" min="20" max="240" step="1" value="60" />
+          </label>
+          <label class="field" id="mix-a-field" hidden>
+            <span>First gamaka</span>
+            <select id="mix-a"></select>
+          </label>
+          <label class="field" id="mix-b-field" hidden>
+            <span>Second gamaka</span>
+            <select id="mix-b"></select>
+          </label>
+        </div>
+
+        <div class="gamaka-stage">
+          <svg id="gamaka-graph" class="gamaka-graph" viewBox="0 0 800 340" role="img"></svg>
+          <div class="gamaka-transport">
+            <button id="play-btn" type="button" class="primary-btn">Play</button>
+            <button id="stop-btn" type="button" class="secondary-btn">Stop</button>
+            <p id="gamaka-path" class="gamaka-path"></p>
+            <p id="gamaka-meta" class="gamaka-meta"></p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./gamaka.ts"></script>
+  </body>
+</html>

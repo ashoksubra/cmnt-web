@@ -42,5 +42,11 @@ export default defineConfig({
   build: {
     outDir: resolve(root, "dist-web"),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(root, "web/index.html"),
+        gamaka: resolve(root, "web/gamaka.html"),
+      },
+    },
   },
 });
