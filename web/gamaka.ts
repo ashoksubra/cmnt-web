@@ -249,89 +249,6 @@ function scaleGrid(contour: GamakaContour, lo: number, hi: number): { midi: numb
   return rows;
 }
 
-type TrendPoint = { x: number; y: number; gain: number };
-
-/** Smooth a run of pitch points. Volume is interpolated, not splined, so it does not overshoot. */
-function trendSamples(points: readonly TrendPoint[]): TrendPoint[] {
-  if (points.length < 2) return [...points];
-  const out: TrendPoint[] = [];
-  const at = (i: number): TrendPoint => points[Math.max(0, Math.min(points.length - 1, i))]!;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = at(i - 1);
-    const p1 = at(i);
-    const p2 = at(i + 1);
-    const p3 = at(i + 2);
-    const steps = 10;
-    for (let s = 0; s < steps; s++) {
-      const t = s / steps;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      out.push({
-        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-        gain: p1.gain + (p2.gain - p1.gain) * t,
-      });
-    }
-  }
-  const last = points[points.length - 1]!;
-  out.push(last);
-  return out;
-}
-
-/**
- * Split where the pitch jumps. The note just left is held until the pluck,
- * so a struck tone still has length. A slide stays one curve.
- */
-function trendRuns(points: readonly TrendPoint[], slides: readonly boolean[]): TrendPoint[][] {
-  const runs: TrendPoint[][] = [];
-  let run: TrendPoint[] = [];
-  for (let i = 0; i < points.length; i++) {
-    const point = points[i]!;
-    if (i > 0 && !slides[i] && run.length > 0) {
-      const held = run[run.length - 1]!;
-      if (point.x - held.x > 0.4) run.push({ x: point.x, y: held.y, gain: held.gain });
-      runs.push(run);
-      run = [];
-    }
-    run.push(point);
-  }
-  if (run.length > 0) runs.push(run);
-  return runs;
-}
-
-/** Closed outline whose thickness follows gain: quiet is thin, a waxing tone swells. */
-function volumeRibbon(samples: readonly TrendPoint[]): string {
-  if (samples.length < 2) return "";
-  const left: string[] = [];
-  const right: string[] = [];
-  let nx = 0;
-  let ny = -1;
-  for (let i = 0; i < samples.length; i++) {
-    const prev = samples[Math.max(0, i - 1)]!;
-    const next = samples[Math.min(samples.length - 1, i + 1)]!;
-    const dx = next.x - prev.x;
-    const dy = next.y - prev.y;
-    const len = Math.hypot(dx, dy);
-    if (len > 0.5) {
-      nx = -dy / len;
-      ny = dx / len;
-    }
-    const half = 1.4 + Math.max(0, samples[i]!.gain) * 8;
-    const p = samples[i]!;
-    left.push(`${(p.x + nx * half).toFixed(2)},${(p.y + ny * half).toFixed(2)}`);
-    right.push(`${(p.x - nx * half).toFixed(2)},${(p.y - ny * half).toFixed(2)}`);
-  }
-  right.reverse();
-  return `M${left[0]} L${left.slice(1).join(" L")} L${right.join(" L")} Z`;
-}
-
-function centerline(samples: readonly TrendPoint[]): string {
-  if (samples.length === 0) return "";
-  return samples
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
-    .join(" ");
-}
-
 function draw(contour: GamakaContour): void {
   graph.replaceChildren();
   const padL = 72;
@@ -382,46 +299,21 @@ function draw(contour: GamakaContour): void {
   }
 
   const voiceCount = Math.max(...contour.points.map((p) => p.pitches.length));
-  const slides = contour.points.map((p) => p.slide);
   for (let v = voiceCount - 1; v >= 0; v--) {
-    const knots: TrendPoint[] = contour.points.map((p) => ({
-      x: xOf(p.sec),
-      y: yOf(p.pitches[Math.min(v, p.pitches.length - 1)]!),
-      gain: p.gain,
-    }));
-    for (const run of trendRuns(knots, slides)) {
-      if (run.length === 1 && v === 0) {
-        const p = run[0]!;
-        const r = 1.4 + Math.max(0, p.gain) * 4;
-        graph.append(el("circle", { cx: p.x, cy: p.y, r, fill: "#1d4ed8" }));
-        continue;
-      }
-      const smooth = trendSamples(run);
-      if (v === 0) {
-        const ribbon = volumeRibbon(smooth);
-        if (ribbon) {
-          graph.append(
-            el("path", {
-              d: ribbon,
-              fill: "#93c5fd",
-              stroke: "none",
-            }),
-          );
-        }
-      }
-      const line = centerline(smooth);
-      if (!line) continue;
-      const stroke: Record<string, string | number> = {
-        d: line,
-        fill: "none",
-        stroke: v === 0 ? "#1d4ed8" : "#94a3b8",
-        "stroke-width": v === 0 ? 1.6 : 1.35,
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      };
-      if (v !== 0) stroke["stroke-dasharray"] = "5 4";
-      graph.append(el("path", stroke));
-    }
+    const d = contour.points
+      .map((p, i) => {
+        const midi = p.pitches[Math.min(v, p.pitches.length - 1)]!;
+        return `${i === 0 ? "M" : "L"}${xOf(p.sec).toFixed(2)},${yOf(midi).toFixed(2)}`;
+      })
+      .join(" ");
+    const stroke: Record<string, string | number> = {
+      d,
+      fill: "none",
+      stroke: v === 0 ? "#1d4ed8" : "#94a3b8",
+      "stroke-width": v === 0 ? 2.25 : 1.5,
+    };
+    if (v !== 0) stroke["stroke-dasharray"] = "5 4";
+    graph.append(el("path", stroke));
   }
 
   graph.append(
@@ -473,8 +365,7 @@ function render(): void {
   const named = readPhrase();
   const countNote =
     named.truncated ? " · first 8 notes" : named.notes.length >= 2 ? ` · ${named.notes.length} notes` : "";
-  const volumeNote = " · curve thickens as volume waxes";
-  metaLine.textContent = `${contour.aksharas} aksharakala${contour.aksharas === 1 ? "" : "s"} · ${contour.durationSec.toFixed(1)} s · ${contour.bpm} BPM · Sa = ${shrutiLabel(pc, octave)}${countNote}${volumeNote}`;
+  metaLine.textContent = `${contour.aksharas} aksharakala${contour.aksharas === 1 ? "" : "s"} · ${contour.durationSec.toFixed(1)} s · ${contour.bpm} BPM · Sa = ${shrutiLabel(pc, octave)}${countNote}`;
   draw(contour);
   for (const button of list.querySelectorAll<HTMLButtonElement>("button")) {
     const on = button.dataset.id === currentId;
