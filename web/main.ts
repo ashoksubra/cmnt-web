@@ -118,7 +118,9 @@ const editRagaAro = document.querySelector<HTMLInputElement>("#edit-raga-aro")!;
 const editRagaAva = document.querySelector<HTMLInputElement>("#edit-raga-ava")!;
 const editRagaDwija = document.querySelector<HTMLInputElement>("#edit-raga-dwija")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
+const sourceGutter = document.querySelector<HTMLDivElement>("#source-gutter")!;
 const sourceHighlight = document.querySelector<HTMLDivElement>("#source-line-highlight")!;
+const sourcePairHighlight = document.querySelector<HTMLDivElement>("#source-pair-highlight")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
 const composerEl = document.querySelector<HTMLElement>(".composer")!;
@@ -435,45 +437,109 @@ function baseName(): string {
   return currentFileName.replace(/\.(txt|cmnt)$/i, "") || "score";
 }
 
-/** Line the status message is talking about. Null when the source has no mistake. */
+/**
+ * Line the status message is talking about. Null when the source has no mistake.
+ * Counting matches the gutter: line 1 is the first line of the file, including
+ * the header and blank lines.
+ */
 let markedSourceLine: number | null = null;
+/** The S: line paired with a lyric error, when there is one. */
+let markedPairLine: number | null = null;
 
-function sourceLineMetrics(): { lineHeight: number; padTop: number } {
-  const style = getComputedStyle(sourceInput);
-  return {
-    lineHeight: parseFloat(style.lineHeight) || 20,
-    padTop: parseFloat(style.paddingTop) || 0,
-  };
+const SOURCE_LINE_HEIGHT = 20;
+
+function sourceLines(): string[] {
+  return sourceInput.value.split("\n");
 }
 
-/** Keep the highlight band on the source line as the editor scrolls. */
-function placeSourceHighlight(): void {
-  if (markedSourceLine == null) {
-    sourceHighlight.hidden = true;
+/** The S: line just above this L: line, skipping blanks. */
+function pairedSwaraLine(lineNo: number): number | null {
+  const lines = sourceLines();
+  const here = (lines[lineNo - 1] ?? "").trim();
+  if (!/^L:/i.test(here)) return null;
+  for (let i = lineNo - 2; i >= 0; i--) {
+    const text = lines[i]!.trim();
+    if (text === "") continue;
+    return /^S:/i.test(text) ? i + 1 : null;
+  }
+  return null;
+}
+
+function sourceLinePreview(lineNo: number): string {
+  const text = (sourceLines()[lineNo - 1] ?? "").trim();
+  if (text === "") return "(blank)";
+  return text.length > 72 ? `${text.slice(0, 72)}…` : text;
+}
+
+/** Status text that names the gutter number and quotes that source line. */
+function formatLineStatus(lineNo: number, message: string): string {
+  const pair = pairedSwaraLine(lineNo);
+  const where = pair == null ? `Line ${lineNo}` : `Line ${lineNo} (L:), swaras on line ${pair} (S:)`;
+  return `${where} · ${sourceLinePreview(lineNo)} — ${message}`;
+}
+
+function buildSourceGutter(): void {
+  const count = Math.max(sourceLines().length, 1);
+  sourceGutter.style.width = `${String(count).length + 1.5}ch`;
+  const parts: string[] = [];
+  for (let n = 1; n <= count; n++) {
+    const cls = n === markedSourceLine ? "ln marked" : n === markedPairLine ? "ln pair" : "ln";
+    parts.push(`<div class="${cls}" data-line="${n}">${n}</div>`);
+  }
+  const html = parts.join("");
+  if (sourceGutter.innerHTML !== html) sourceGutter.innerHTML = html;
+}
+
+function gutterRow(lineNo: number): HTMLElement | null {
+  return sourceGutter.querySelector<HTMLElement>(`[data-line="${lineNo}"]`);
+}
+
+function placeBand(band: HTMLDivElement, lineNo: number | null): void {
+  if (lineNo == null) {
+    band.hidden = true;
     return;
   }
-  const { lineHeight, padTop } = sourceLineMetrics();
-  const top = padTop + (markedSourceLine - 1) * lineHeight - sourceInput.scrollTop;
-  sourceHighlight.hidden = false;
-  sourceHighlight.style.height = `${lineHeight}px`;
-  sourceHighlight.style.transform = `translateY(${top}px)`;
+  const row = gutterRow(lineNo);
+  const host = sourceGutter.parentElement;
+  if (row == null || host == null) {
+    band.hidden = true;
+    return;
+  }
+  const top = row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+  band.hidden = false;
+  band.style.height = `${row.offsetHeight}px`;
+  band.style.transform = `translateY(${top}px)`;
+}
+
+/** Keep the numbered rows and the highlight on the source line as the editor scrolls. */
+function placeSourceHighlight(): void {
+  sourceGutter.scrollTop = sourceInput.scrollTop;
+  placeBand(sourceHighlight, markedSourceLine);
+  placeBand(sourcePairHighlight, markedPairLine);
+}
+
+function scrollSourceLineIntoView(lineNo: number): void {
+  const padTop = parseFloat(getComputedStyle(sourceInput).paddingTop) || 0;
+  sourceInput.scrollTop = Math.max(0, padTop + (lineNo - 1) * SOURCE_LINE_HEIGHT - SOURCE_LINE_HEIGHT * 3);
+  sourceGutter.scrollTop = sourceInput.scrollTop;
 }
 
 /**
- * Paint the mistake in place, with a few lines of context above it.
+ * Paint the mistake on its numbered row, with a few lines of context above it.
  * Scroll only when the reported line changes, so later keystrokes stay put.
  */
 function markSourceLine(lineNo: number | null): void {
-  const changed = lineNo !== markedSourceLine;
+  const pair = lineNo == null ? null : pairedSwaraLine(lineNo);
+  const changed = lineNo !== markedSourceLine || pair !== markedPairLine;
   markedSourceLine = lineNo;
+  markedPairLine = pair;
+  buildSourceGutter();
   if (lineNo == null) {
     sourceHighlight.hidden = true;
+    sourcePairHighlight.hidden = true;
     return;
   }
-  if (changed) {
-    const { lineHeight, padTop } = sourceLineMetrics();
-    sourceInput.scrollTop = Math.max(0, padTop + (lineNo - 1) * lineHeight - lineHeight * 3);
-  }
+  if (changed) scrollSourceLineIntoView(lineNo);
   placeSourceHighlight();
 }
 
@@ -482,21 +548,19 @@ function markSourceLine(lineNo: number | null): void {
  * is true — live parse while typing must not steal the caret (that wiped the line).
  */
 function selectSourceLine(lineNo: number, opts: { force?: boolean } = {}): void {
-  const lines = sourceInput.value.split("\n");
+  const lines = sourceLines();
   if (lineNo < 1 || lineNo > lines.length) return;
   let start = 0;
   for (let i = 0; i < lineNo - 1; i++) start += lines[i]!.length + 1;
   const end = start + lines[lineNo - 1]!.length;
-  const lineHeight = parseFloat(getComputedStyle(sourceInput).lineHeight) || 20;
-  const scrollTop = Math.max(0, (lineNo - 4) * lineHeight);
   const typingInSource = document.activeElement === sourceInput && !opts.force;
   if (typingInSource) {
-    sourceInput.scrollTop = scrollTop;
+    scrollSourceLineIntoView(lineNo);
     return;
   }
   sourceInput.focus();
   sourceInput.setSelectionRange(start, end);
-  sourceInput.scrollTop = scrollTop;
+  scrollSourceLineIntoView(lineNo);
 }
 
 function looksLikeYamlFrontMatter(text: string): boolean {
@@ -802,7 +866,7 @@ function render(): void {
     const hard = warnings.find((w) => w.severity === "error");
     const hint = warnings.find((w) => w.severity === "hint");
     if (hard) {
-      setStatusError(`Line ${hard.line} — ${hard.message}`);
+      setStatusError(formatLineStatus(hard.line, hard.message));
       markSourceLine(hard.line);
     } else if (hint) {
       setStatusHint(`Still typing (line ${hint.line}): ${hint.message}`);
@@ -814,7 +878,7 @@ function render(): void {
   } catch (err) {
     if (lastGoodSvg) scorePage.innerHTML = lastGoodSvg;
     if (err instanceof ParseException) {
-      setStatusError(`Parse error: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
+      setStatusError(formatLineStatus(err.line, err.message.replace(/^line \d+:\s*/, "")));
       markSourceLine(err.line);
       // Live update while typing: scroll only — do not select the whole line.
       selectSourceLine(err.line, { force: document.activeElement !== sourceInput });
@@ -1495,7 +1559,7 @@ async function playFromStart(): Promise<void> {
     );
   } catch (err) {
     if (err instanceof ParseException) {
-      setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
+      setStatusError(`Play failed: ${formatLineStatus(err.line, err.message.replace(/^line \d+:\s*/, ""))}`);
       markSourceLine(err.line);
       selectSourceLine(err.line, { force: true });
     } else {
@@ -1908,6 +1972,7 @@ openFileInput.addEventListener("change", () => {
 });
 sourceInput.addEventListener("scroll", () => placeSourceHighlight());
 sourceInput.addEventListener("input", () => {
+  buildSourceGutter();
   markDirty();
   updateSyntaxHelp();
   scheduleRender();
