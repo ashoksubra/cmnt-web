@@ -624,11 +624,23 @@ body {
 }
 
 .editor-scroll {
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow: hidden;
   background: #fbfcfe;
+}
+
+/* Sits behind the source text. Marks the line named in the status message. */
+.source-line-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #f6d0d0;
 }
 
 .source-input {
@@ -645,8 +657,10 @@ body {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.55;
+  position: relative;
+  z-index: 1;
   color: #1f2933;
-  background: #fbfcfe;
+  background: transparent;
   tab-size: 4;
   overflow: auto;
   white-space: pre;
