@@ -628,26 +628,71 @@ body {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   overflow: hidden;
   background: #fbfcfe;
 }
 
-/* Sits behind the source text. Marks the line named in the status message. */
-.source-line-highlight {
+/* Sits behind the numbered row named in the status message. */
+.source-line-highlight,
+.source-pair-highlight {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   z-index: 0;
   pointer-events: none;
+}
+
+.source-line-highlight {
   background: #f6d0d0;
 }
 
+.source-pair-highlight {
+  background: #fde8e8;
+}
+
+.source-gutter {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 1;
+  overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 14px 8px 14px 10px;
+  border-right: 1px solid #e4e9f0;
+  background: transparent;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: right;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.source-gutter .ln {
+  height: 20px;
+  line-height: 20px;
+}
+
+.source-gutter .ln.pair {
+  color: #b4536a;
+}
+
+.source-gutter .ln.marked {
+  color: #9f1239;
+  font-weight: 700;
+}
+
 .source-input {
+  grid-column: 2;
+  grid-row: 1;
   display: block;
   box-sizing: border-box;
   width: 100%;
-  min-width: 100%;
+  min-width: 0;
   min-height: 100%;
   height: 100%;
   border: none;
@@ -656,7 +701,7 @@ body {
   padding: 14px 16px;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 20px;
   position: relative;
   z-index: 1;
   color: #1f2933;

@@ -953,12 +953,29 @@ class Parser {
 }
 
 export function parse(text: string, opts: ParseOptions = {}): Song {
-  let preprocessed: string;
+  let aligned: YamlFrontMatter.AlignedSource;
   try {
-    preprocessed = YamlFrontMatter.preprocess(text);
+    aligned = YamlFrontMatter.alignSource(text);
   } catch (e) {
     if (e instanceof YamlFrontMatter.YamlFrontMatterError) throw new ParseException(e.message, 0);
     throw e;
   }
-  return new Parser(opts).doParse(preprocessed);
+  // The caret is an editor line. The parser numbers the translated text.
+  const parserOpts: ParseOptions =
+    opts.caretLine == null ? opts : { ...opts, caretLine: aligned.toPreprocessedLine(opts.caretLine) };
+  try {
+    const song = new Parser(parserOpts).doParse(aligned.text);
+    for (const w of song.parseWarnings) {
+      if (w.line > 0) w.line = aligned.toSourceLine(w.line);
+    }
+    return song;
+  } catch (e) {
+    if (e instanceof ParseException && e.line > 0) {
+      const sourceLine = aligned.toSourceLine(e.line);
+      if (sourceLine !== e.line) {
+        throw new ParseException(e.message.replace(/^line \d+:\s*/, ""), sourceLine);
+      }
+    }
+    throw e;
+  }
 }

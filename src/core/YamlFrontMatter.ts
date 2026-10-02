@@ -50,14 +50,38 @@ interface YamlMap {
 }
 type YamlValue = string | YamlMap;
 
+/** Line numbers in the translated text, mapped back onto the editor buffer. */
+export interface AlignedSource {
+  /** Classic-directive text the parser reads. */
+  text: string;
+  /** 1-based line in `text` → 1-based line in the original editor buffer. */
+  toSourceLine: (preprocessedLine: number) => number;
+  /** 1-based editor line → 1-based line in `text` (0 when that line was not copied through). */
+  toPreprocessedLine: (sourceLine: number) => number;
+}
+
+const identityLine = (n: number): number => n;
+
 /** If the text starts with a "---" front-matter block, returns the text with
  *  that block replaced by equivalent classic directives (everything else
  *  unchanged). Otherwise returns the text unmodified. */
 export function preprocess(text: string): string {
+  return alignSource(text).text;
+}
+
+/**
+ * Same translation as `preprocess`, plus a map so a parse error can name the
+ * line in the editor. The `---` block is shorter or longer than the directives
+ * it becomes, so a raw parser line number lands on the header instead of the
+ * S:/L: line that failed.
+ */
+export function alignSource(text: string): AlignedSource {
   const lines = text.split("\n");
   let i = 0;
   while (i < lines.length && lines[i]!.trim() === "") i++;
-  if (i >= lines.length || lines[i]!.trim() !== "---") return text;
+  if (i >= lines.length || lines[i]!.trim() !== "---") {
+    return { text, toSourceLine: identityLine, toPreprocessedLine: identityLine };
+  }
 
   const blockStart = i + 1;
   let blockEnd = -1;
@@ -67,13 +91,87 @@ export function preprocess(text: string): string {
       break;
     }
   }
-  if (blockEnd === -1) return text; // no closing fence -- classic parser reports the real error
+  if (blockEnd === -1) {
+    return { text, toSourceLine: identityLine, toPreprocessedLine: identityLine };
+  }
 
   const blockLines = lines.slice(blockStart, blockEnd);
   const parsed = parseBlock(blockLines);
   const directives = translate(parsed);
+  const fenceLine = i + 1;
+  const directiveLines = directiveSourceLines(directives, indexKeyLines(blockLines, blockStart + 1), fenceLine);
+  const translated = [...directives, ...lines.slice(blockEnd + 1)].join("\n");
+  // Body lines keep their order but start earlier by however many header lines
+  // the directives replaced. Add that gap back to recover the editor line.
+  const delta = blockEnd + 1 - directives.length;
+  const directiveCount = directives.length;
 
-  return [...directives, ...lines.slice(blockEnd + 1)].join("\n");
+  return {
+    text: translated,
+    toSourceLine(preprocessedLine: number): number {
+      if (preprocessedLine <= 0) return preprocessedLine;
+      if (preprocessedLine <= directiveCount) return directiveLines[preprocessedLine - 1] ?? fenceLine;
+      return preprocessedLine + delta;
+    },
+    toPreprocessedLine(sourceLine: number): number {
+      const at = directiveLines.indexOf(sourceLine);
+      if (at >= 0) return at + 1;
+      const bodyStart = blockEnd + 2;
+      if (sourceLine < bodyStart) return 0;
+      return sourceLine - delta;
+    },
+  };
+}
+
+/** 1-based editor line of each `key:` in the front-matter block (first wins). */
+function indexKeyLines(blockLines: string[], firstLineNo: number): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let k = 0; k < blockLines.length; k++) {
+    const content = stripComment(blockLines[k]!).trim();
+    if (content === "") continue;
+    const colon = findTopLevelColon(content);
+    if (colon < 0) continue;
+    const key = content.slice(0, colon).trim().toLowerCase();
+    if (key === "" || map.has(key)) continue;
+    map.set(key, firstLineNo + k);
+  }
+  return map;
+}
+
+const DIRECTIVE_KEYS: Record<string, string[]> = {
+  layout: ["layout"],
+  orientation: ["orientation"],
+  cyclesperrow: ["cyclesperrow"],
+  rowspacing: ["rowspacing"],
+  cellspacing: ["cellspacing"],
+  language: ["language"],
+  melakarta: ["melakarta"],
+  raagam: ["raga", "ragam", "raagam"],
+  raagamdisplay: ["ragadisplay", "ragamdisplay", "raagamdisplay"],
+  tala: ["tala", "talam", "taladisplay", "talamdisplay"],
+  talamdisplay: ["taladisplay", "talamdisplay"],
+  defaultspeed: ["speed", "defaultspeed"],
+  speedmarks: ["speedmarks"],
+  phraseends: ["phraseends"],
+  swaraprefs: ["swara"],
+  lyricprefs: ["lyric"],
+  headingprefs: ["heading"],
+  gamakaprefs: ["gamaka"],
+};
+
+/** Editor line that produced each generated directive, in emit order. */
+function directiveSourceLines(directives: string[], keyLines: Map<string, number>, fallback: number): number[] {
+  const headingLines = [keyLines.get("title"), keyLines.get("composer")].filter((n): n is number => n != null);
+  let headingIdx = 0;
+  return directives.map((directive) => {
+    if (/^Heading:/i.test(directive)) return headingLines[headingIdx++] ?? fallback;
+    const name = directive.slice(0, directive.indexOf(":")).trim().toLowerCase();
+    for (const key of DIRECTIVE_KEYS[name] ?? [name]) {
+      const line = keyLines.get(key);
+      if (line != null) return line;
+    }
+    return fallback;
+  });
 }
 
 // ---- minimal indentation-based key:value parser (subset of YAML) ----
