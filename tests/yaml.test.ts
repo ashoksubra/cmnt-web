@@ -136,6 +136,72 @@ describe("YamlFrontMatter.preprocess", () => {
     expect(song.effectiveDefaultSpeed).toBe(0);
   });
 
+  it("reports the editor line for a body error, not a line inside the --- header", () => {
+    const lines = [
+      "---",
+      "title: Test Song",
+      "composer: Someone",
+      "raga: Sri",
+      "tala: Adi",
+      "language: Tamil",
+      "style:",
+      "  lyric: { size: 11 }",
+      "---",
+      "S: s r g m",
+      "L: sa ri",
+      "",
+    ];
+    const lyricLine = lines.indexOf("L: sa ri") + 1;
+    try {
+      parse(lines.join("\n"));
+      expect.unreachable("should throw");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ParseException);
+      expect((e as ParseException).line).toBe(lyricLine);
+      expect((e as ParseException).message).toMatch(new RegExp(`^line ${lyricLine}:`));
+    }
+  });
+
+  it("reports the editor line of an invalid swara after a --- header", () => {
+    const lines = ["---", "title: Test", "tala: Adi", "---", "S: s r xyz", ""];
+    const swaraLine = lines.indexOf("S: s r xyz") + 1;
+    try {
+      parse(lines.join("\n"));
+      expect.unreachable("should throw");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ParseException);
+      expect((e as ParseException).line).toBe(swaraLine);
+    }
+  });
+
+  it("reports the tala: line when the header names an unknown tala", () => {
+    const lines = ["---", "title: Test", "tala: NotATala", "---", "S: s", ""];
+    const talaLine = lines.indexOf("tala: NotATala") + 1;
+    try {
+      parse(lines.join("\n"));
+      expect.unreachable("should throw");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ParseException);
+      expect((e as ParseException).line).toBe(talaLine);
+    }
+  });
+
+  it("keeps a live lyric warning on the editor line while the caret is on that line", () => {
+    const lines = [
+      "---",
+      "title: Test Song",
+      "tala: Adi",
+      "---",
+      "S: s r g m",
+      "L: sa ri",
+      "",
+    ];
+    const lyricLine = lines.indexOf("L: sa ri") + 1;
+    const song = parse(lines.join("\n"), { live: true, caretLine: lyricLine });
+    expect(song.parseWarnings[0]?.severity).toBe("hint");
+    expect(song.parseWarnings[0]?.line).toBe(lyricLine);
+  });
+
   it("emits LyricPrefs font+size and applies them on the notation block", () => {
     const text = [
       "---",
