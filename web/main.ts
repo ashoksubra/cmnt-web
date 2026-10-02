@@ -118,6 +118,7 @@ const editRagaAro = document.querySelector<HTMLInputElement>("#edit-raga-aro")!;
 const editRagaAva = document.querySelector<HTMLInputElement>("#edit-raga-ava")!;
 const editRagaDwija = document.querySelector<HTMLInputElement>("#edit-raga-dwija")!;
 const sourceInput = document.querySelector<HTMLTextAreaElement>("#source-input")!;
+const sourceHighlight = document.querySelector<HTMLDivElement>("#source-line-highlight")!;
 const statusLine = document.querySelector<HTMLDivElement>("#status-line")!;
 const scorePage = document.querySelector<HTMLDivElement>("#score-page")!;
 const composerEl = document.querySelector<HTMLElement>(".composer")!;
@@ -432,6 +433,48 @@ function setDocument(text: string, fileName: string, handle: FileSystemFileHandl
 
 function baseName(): string {
   return currentFileName.replace(/\.(txt|cmnt)$/i, "") || "score";
+}
+
+/** Line the status message is talking about. Null when the source has no mistake. */
+let markedSourceLine: number | null = null;
+
+function sourceLineMetrics(): { lineHeight: number; padTop: number } {
+  const style = getComputedStyle(sourceInput);
+  return {
+    lineHeight: parseFloat(style.lineHeight) || 20,
+    padTop: parseFloat(style.paddingTop) || 0,
+  };
+}
+
+/** Keep the highlight band on the source line as the editor scrolls. */
+function placeSourceHighlight(): void {
+  if (markedSourceLine == null) {
+    sourceHighlight.hidden = true;
+    return;
+  }
+  const { lineHeight, padTop } = sourceLineMetrics();
+  const top = padTop + (markedSourceLine - 1) * lineHeight - sourceInput.scrollTop;
+  sourceHighlight.hidden = false;
+  sourceHighlight.style.height = `${lineHeight}px`;
+  sourceHighlight.style.transform = `translateY(${top}px)`;
+}
+
+/**
+ * Paint the mistake in place, with a few lines of context above it.
+ * Scroll only when the reported line changes, so later keystrokes stay put.
+ */
+function markSourceLine(lineNo: number | null): void {
+  const changed = lineNo !== markedSourceLine;
+  markedSourceLine = lineNo;
+  if (lineNo == null) {
+    sourceHighlight.hidden = true;
+    return;
+  }
+  if (changed) {
+    const { lineHeight, padTop } = sourceLineMetrics();
+    sourceInput.scrollTop = Math.max(0, padTop + (lineNo - 1) * lineHeight - lineHeight * 3);
+  }
+  placeSourceHighlight();
 }
 
 /**
@@ -760,19 +803,24 @@ function render(): void {
     const hint = warnings.find((w) => w.severity === "hint");
     if (hard) {
       setStatusError(`Line ${hard.line} — ${hard.message}`);
+      markSourceLine(hard.line);
     } else if (hint) {
       setStatusHint(`Still typing (line ${hint.line}): ${hint.message}`);
+      markSourceLine(null);
     } else {
       setStatusOk(documentDirty ? "Edited — File → Save to keep your .txt" : "Ready");
+      markSourceLine(null);
     }
   } catch (err) {
     if (lastGoodSvg) scorePage.innerHTML = lastGoodSvg;
     if (err instanceof ParseException) {
       setStatusError(`Parse error: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
+      markSourceLine(err.line);
       // Live update while typing: scroll only — do not select the whole line.
       selectSourceLine(err.line, { force: document.activeElement !== sourceInput });
     } else {
       const message = err instanceof Error ? err.message : String(err);
+      markSourceLine(null);
       setStatusError(`Error: ${message}`);
     }
     if (!lastGoodSvg) {
@@ -1448,6 +1496,7 @@ async function playFromStart(): Promise<void> {
   } catch (err) {
     if (err instanceof ParseException) {
       setStatusError(`Play failed: line ${err.line} — ${err.message.replace(/^line \d+:\s*/, "")}`);
+      markSourceLine(err.line);
       selectSourceLine(err.line, { force: true });
     } else {
       setStatusError(`Play failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1857,6 +1906,7 @@ openFileInput.addEventListener("change", () => {
   const file = openFileInput.files?.[0];
   if (file) void openFileFromInput(file);
 });
+sourceInput.addEventListener("scroll", () => placeSourceHighlight());
 sourceInput.addEventListener("input", () => {
   markDirty();
   updateSyntaxHelp();
