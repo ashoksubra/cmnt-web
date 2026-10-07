@@ -119,6 +119,16 @@ function surfaceOfVowel(key: string): string {
   }
 }
 
+/** "#n"/"#N" → velar nasal, "~n"/"~N" → palatal nasal. Null when this isn't that mark. */
+function matchMarkedNasal(s: string, i: number): "ng" | "ny" | null {
+  const mark = s.charAt(i);
+  const n = s.charAt(i + 1);
+  if (!/[nN]/.test(n)) return null;
+  if (mark === "#") return "ng";
+  if (mark === "~") return "ny";
+  return null;
+}
+
 function matchVowel(s: string, i: number): string | null {
   for (const v of VOWEL_KEYS) {
     const surface = surfaceOfVowel(v);
@@ -155,23 +165,24 @@ function parseSyllable(s: string): Unit[] {
   let i = 0;
   const n = s.length;
   while (i < n) {
-    // Explicit escape hatches for consonant-cluster nasals that plain romanization
-    // can't disambiguate (e.g. "sangam" has only one visible "g" for both the
-    // velar nasal and the following "ga" syllable). "~n" always means a bare,
-    // stand-alone palatal nasal and "#n" a bare velar nasal, regardless of what
-    // follows -- they never absorb a following vowel.
-    if (s.startsWith("~n", i)) {
-      units.push({ kind: "bareCons", c: "ny" });
+    // Explicit escape hatches for the nasals plain romanization can't spell.
+    // "#n" is velar ங, "~n" is palatal ஞ. A following vowel joins the letter
+    // ("#nA" → ஙா, "~nA" → ஞா). With no vowel they stay bare ("#n" → ங்,
+    // "~n" → ஞ்) so the next consonant can form the cluster ("#nga" → ங்க).
+    const markedNasal = matchMarkedNasal(s, i);
+    if (markedNasal != null) {
       i += 2;
-      continue;
-    }
-    if (s.startsWith("#n", i)) {
-      units.push({ kind: "bareCons", c: "ng" });
-      i += 2;
+      const vMarked = matchVowel(s, i);
+      if (vMarked != null) {
+        units.push({ kind: "consVowel", c: markedNasal, v: vMarked });
+        i += surfaceOfVowel(vMarked).length;
+      } else {
+        units.push({ kind: "bareCons", c: markedNasal });
+      }
       continue;
     }
     // In-token Tamil n overrides. "@n"/"!n" force dental ந; "%n" forces alveolar ன.
-    // Unlike ~n/#n these may take a vowel ("%nA" → னா, "ka@n" → கந்).
+    // These take a vowel the same way ("%nA" → னா, "ka@n" → கந்).
     if (s.startsWith("%n", i) || s.startsWith("@n", i) || s.startsWith("!n", i)) {
       const key = s.startsWith("%n", i) ? "n-alv" : "n-dent";
       i += 2;

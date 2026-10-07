@@ -69,6 +69,28 @@ describe("transliterate (Tamil nasals — matches JAR)", () => {
     expect(transliterate("@nE", "tamil")).toBe("நே");
   });
 
+  it("joins a following vowel onto #n and ~n (ஙா / ஞா, not ங்ஆ / ஞ்ஆ)", () => {
+    expect(transliterate("#nA", "tamil")).toBe("ஙா");
+    expect(transliterate("~nA", "tamil")).toBe("ஞா");
+    expect(transliterate("#na", "tamil")).toBe("ங");
+    expect(transliterate("~na", "tamil")).toBe("ஞ");
+    expect(transliterate("#ni", "tamil")).toBe("ஙி");
+    expect(transliterate("~nI", "tamil")).toBe("ஞீ");
+    expect(transliterate("#nu", "tamil")).toBe("ஙு");
+    expect(transliterate("~nU", "tamil")).toBe("ஞூ");
+    expect(transliterate("#ne", "tamil")).toBe("ஙெ");
+    expect(transliterate("~nE", "tamil")).toBe("ஞே");
+    expect(transliterate("#nai", "tamil")).toBe("ஙை");
+    expect(transliterate("~no", "tamil")).toBe("ஞொ");
+    expect(transliterate("#nO", "tamil")).toBe("ஙோ");
+    expect(transliterate("~nau", "tamil")).toBe("ஞௌ");
+    expect(transliterate("#NA", "tamil")).toBe("ஙா");
+    expect(transliterate("#nA", "tamil")).not.toBe("ங்ஆ");
+    expect(transliterate("~nA", "tamil")).not.toBe("ஞ்ஆ");
+    expect(transliterateText("#nA", "tamil")).toBe("ஙா");
+    expect(transliterateText("~nA", "tamil")).toBe("ஞா");
+  });
+
   it("treats lone n as ni, with dental vs alveolar by wordStart", () => {
     expect(transliterate("n", "tamil", true)).toBe("நி");
     expect(transliterate("n", "tamil", false)).toBe("னி");
