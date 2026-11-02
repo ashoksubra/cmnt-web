@@ -219,4 +219,32 @@ describe("renderScoreSvg", () => {
     const svg = renderScoreSvg(layoutSong(song));
     expect(svg).not.toMatch(/class="cmnt-lyric"[^>]*font-size/);
   });
+
+  it("centers a phrase-separator hyphen in the ink gap between notes", () => {
+    const song = parse("Tala: Adi\nDefaultSpeed: 0\nS: p- sA r g\n");
+    const boxes: Record<string, { advance: number; inkMin: number; inkMax: number }> = {
+      p: { advance: 8, inkMin: 1, inkMax: 7 },
+      sA: { advance: 18, inkMin: 1, inkMax: 17 },
+    };
+    const svg = renderScoreSvg(layoutSong(song), {
+      measureGlyph: (text) => boxes[text] ?? { advance: 10, inkMin: 1, inkMax: 9 },
+    });
+    const swaras = [...svg.matchAll(/<text class="cmnt-swara"[^>]*\bx="([^"]+)"[^>]*>([^<]*)</g)].map((m) => ({
+      x: Number(m[1]),
+      text: m[2],
+    }));
+    const hyphen = svg.match(
+      /<line class="cmnt-phrase-break" x1="([^"]+)" y1="[^"]+" x2="([^"]+)" y2="[^"]+"/,
+    );
+    expect(hyphen).not.toBeNull();
+    const p = swaras.find((s) => s.text === "p")!;
+    const sa = swaras.find((s) => s.text === "sA")!;
+    expect(p).toBeDefined();
+    expect(sa).toBeDefined();
+    const pRight = p.x - 8 / 2 + 7;
+    const saLeft = sa.x - 18 / 2 + 1;
+    const mid = (Number(hyphen![1]) + Number(hyphen![2])) / 2;
+    expect(mid).toBeCloseTo((pRight + saLeft) / 2, 5);
+    expect(svg).not.toMatch(/class="cmnt-phrase-break"[^>]*>-<\/text>/);
+  });
 });

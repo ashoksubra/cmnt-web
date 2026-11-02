@@ -122,7 +122,7 @@ export {
   SANKARABHARANAM_GAMAKAS,
 } from "./core/RagaGamakas.js";
 export type { GamakaAtom, RagaGamakaTable, GamakaContext } from "./core/RagaGamakas.js";
-export { defaultMeasureCellWidth, glyphInkCenter } from "./render/SvgScore.js";
+export { defaultMeasureCellWidth, glyphInkCenter, glyphInkLeft, glyphInkRight } from "./render/SvgScore.js";
 export type { CellWidthMeasurer, GlyphMeasurer, GlyphMetrics } from "./render/SvgScore.js";
 export { SCHOOL_PRESETS, DEFAULT_SCHOOL_ID, schoolById } from "./theme/schools.js";
 export type { SchoolId, SchoolPreset, UiLangOverride } from "./theme/schools.js";

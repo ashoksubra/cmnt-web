@@ -773,10 +773,10 @@ body {
 }
 
 .cmnt-phrase-break {
-  fill: var(--swara-color);
-  font-family: var(--swara-font);
-  font-size: var(--swara-size);
-  font-weight: 700;
+  stroke: var(--swara-color);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  fill: none;
 }
 
 .cmnt-speed-beam {

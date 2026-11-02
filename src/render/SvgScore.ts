@@ -93,6 +93,33 @@ export function glyphInkCenter(cellCx: number, m: GlyphMetrics | null | undefine
   return cellCx - m.advance / 2 + (m.inkMin + m.inkMax) / 2;
 }
 
+/** Left edge of glyph ink when drawn with `text-anchor="middle"` at `cellCx`. */
+export function glyphInkLeft(
+  cellCx: number,
+  m: GlyphMetrics | null | undefined,
+  fallbackHalf: number,
+): number {
+  if (m == null || !(m.advance > 0)) return cellCx - fallbackHalf;
+  return cellCx - m.advance / 2 + m.inkMin;
+}
+
+/** Right edge of glyph ink when drawn with `text-anchor="middle"` at `cellCx`. */
+export function glyphInkRight(
+  cellCx: number,
+  m: GlyphMetrics | null | undefined,
+  fallbackHalf: number,
+): number {
+  if (m == null || !(m.advance > 0)) return cellCx + fallbackHalf;
+  return cellCx - m.advance / 2 + m.inkMax;
+}
+
+/** Approximate half-ink width when canvas metrics are unavailable. */
+function estimatedHalfInk(display: string, swaraSize: number, cellHalf: number): number {
+  const n = Math.max(1, Array.from(display).length);
+  const est = swaraSize * (0.16 + 0.26 * n);
+  return Math.min(Math.max(4, cellHalf * 0.82), est);
+}
+
 /** `Language: tamil:someFont` -> `"tamil"`; also handles null/undefined. */
 function languageScript(language: string | null | undefined, forceScript: Script | undefined): Script {
   if (forceScript !== undefined) return forceScript;
@@ -771,22 +798,33 @@ function renderRow(
       }
 
       if (c.phraseEnd) {
-        // Center the bold "-" halfway between this note and the next note
-        // (e.g. in "p- sA", midway between p and sA — not hugging sA).
-        let nextNoteCx: number | null = null;
+        // Geometric hyphen centered in the visual gap between this swara's
+        // ink and the next (e.g. "p- sA"). A text "-" uses font side-bearings
+        // and looks off-center, especially next to a wider syllable.
+        const thisHalf = estimatedHalfInk(swaraDisplay, swaraSize, w / 2);
+        const thisMetrics = measureGlyph?.(swaraDisplay, "swara") ?? null;
+        const rightInk = glyphInkRight(cx, thisMetrics, thisHalf);
+        let leftInk: number | null = null;
         let scanX = x + w;
         for (let j = i + 1; j < row.cells.length; j++) {
           const n = row.cells[j]!;
           const nw = widths[j]!;
           if (n.kind === "swara" && n.text !== "") {
-            nextNoteCx = scanX + nw / 2;
+            const nextDisplay = transliterateSwara(n.text, script);
+            const nextCx = scanX + nw / 2;
+            const nextHalf = estimatedHalfInk(nextDisplay, swaraSize, nw / 2);
+            const nextMetrics = measureGlyph?.(nextDisplay, "swara") ?? null;
+            leftInk = glyphInkLeft(nextCx, nextMetrics, nextHalf);
             break;
           }
           scanX += nw;
         }
-        const markX = nextNoteCx != null ? (cx + nextNoteCx) / 2 : cx;
+        const markX = leftInk != null ? (rightInk + leftInk) / 2 : rightInk + swaraSize * 0.38;
+        const gap = leftInk != null ? Math.max(0, leftInk - rightInk) : swaraSize * 0.9;
+        const hyphenLen = Math.min(swaraSize * 0.55, Math.max(swaraSize * 0.32, gap * 0.38));
+        const hyphenY = baselineY - swaraSize * 0.32;
         parts.push(
-          `<text class="cmnt-phrase-break" x="${fmt(markX)}" y="${fmt(baselineY)}" text-anchor="middle">-</text>`,
+          `<line class="cmnt-phrase-break" x1="${fmt(markX - hyphenLen / 2)}" y1="${fmt(hyphenY)}" x2="${fmt(markX + hyphenLen / 2)}" y2="${fmt(hyphenY)}" />`,
         );
       }
 
